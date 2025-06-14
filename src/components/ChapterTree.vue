@@ -1,10 +1,13 @@
 <template>
   <div class="chapter-tree">
-    <div class="tree-header">
-      <h3 class="text-lg font-medium">目录</h3>
-      <div class="flex gap-2">
+    <div class="header-row">
+      <SidebarToggle 
+        initialTab="chapters" 
+        @toggle="handleToggle" 
+      />
+      <div class="action-buttons">
         <el-tooltip content="导出Word" placement="top">
-          <el-button @click="exportWord" circle>
+          <el-button class="action-button" @click="exportWord" circle>
             <el-icon>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16">
                 <path fill="currentColor" d="M19.5 4h-3V2.5A2.5 2.5 0 0 0 14 0H8a2.5 2.5 0 0 0-2.5 2.5V4h-3A1.5 1.5 0 0 0 1 5.5v15A1.5 1.5 0 0 0 2.5 22h17a1.5 1.5 0 0 0 1.5-1.5v-15A1.5 1.5 0 0 0 19.5 4zM7 2.5c0-.3.2-.5.5-.5h7c.3 0 .5.2.5.5V4H7V2.5zm12 17c0 .3-.2.5-.5.5h-15c-.3 0-.5-.2-.5-.5v-12c0-.3.2-.5.5-.5h15c.3 0 .5.2.5.5v12z"/>
@@ -14,7 +17,7 @@
           </el-button>
         </el-tooltip>
         <el-tooltip content="添加卷" placement="top">
-          <el-button @click="addVolume" circle>
+          <el-button class="action-button" @click="addVolume" circle>
             <el-icon><Plus /></el-icon>
           </el-button>
         </el-tooltip>
@@ -74,16 +77,22 @@ import { v4 as uuidv4 } from 'uuid'
 import * as path from 'path'
 import { type Chapter } from '../services/bookConfigService'
 import { DocumentService } from '../services/documentService'
+import SidebarToggle from './SidebarToggle.vue'
 
 const props = defineProps<{
   chapters: Chapter[],
   currentBook: any
 }>()
 
-const emit = defineEmits(['update:chapters', 'select-chapter'])
+const emit = defineEmits(['update:chapters', 'select-chapter', 'switch-tab'])
 
 const editInput = ref<any>(null)
 const editingNodeId = ref<string | null>(null)
+
+// 处理切换
+const handleToggle = (tab: 'chapters' | 'fragments') => {
+  emit('switch-tab', tab)
+}
 
 // 添加新卷
 const addVolume = () => {
@@ -212,20 +221,20 @@ const exportWord = async () => {
   @apply bg-white rounded-lg shadow p-4 h-full overflow-hidden flex flex-col;
 }
 
+.header-row {
+  @apply flex items-center justify-between mb-4;
+}
+
+.action-buttons {
+  @apply flex gap-2;
+}
+
+.action-button {
+  @apply flex items-center justify-center w-8 h-8 rounded-full border border-gray-300;
+}
+
 .custom-tree {
-  @apply mt-2 flex-1 overflow-auto;
-}
-
-.tree-header {
-  @apply flex justify-between items-center mb-4;
-}
-
-.add-btn {
-  @apply px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600;
-}
-
-.custom-tree {
-  @apply mt-2;
+  @apply flex-1 overflow-auto;
 }
 
 .custom-tree-node {

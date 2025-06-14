@@ -21,7 +21,20 @@
     </div>
     <div class="editor-main">
       <div class="editor-sidebar">
-        <ChapterTree :chapters="currentBook?.content || []" :currentBook="currentBook" @update:chapters="handleChaptersUpdate" @select-chapter="handleChapterSelect" />
+        <ChapterTree 
+          v-if="activeTab === 'chapters'" 
+          :chapters="currentBook?.content || []" 
+          :currentBook="currentBook" 
+          @update:chapters="handleChaptersUpdate" 
+          @select-chapter="handleChapterSelect" 
+          @switch-tab="handleSwitchTab"
+        />
+        <FragmentPane 
+          v-else 
+          :bookId="currentBook?.id || ''" 
+          @select-fragment="handleFragmentSelect"
+          @switch-tab="handleSwitchTab"
+        />
       </div>
       <div class="editor-content">
         <TextEditor :current-chapter="currentChapter" :current-book="currentBook" @save-content="handleSaveContent" />
@@ -37,6 +50,7 @@ import OutlineDetail from '../components/OutlineDetail.vue'
 import { useRouter } from 'vue-router'
 import TextEditor from '../components/TextEditor.vue'
 import ChapterTree from '../components/ChapterTree.vue'
+import FragmentPane from '../components/FragmentPane.vue'
 import { BookConfigService, type Chapter, type Book } from '../services/bookConfigService'
 
 const router = useRouter()
@@ -45,6 +59,7 @@ const currentChapter = ref<Chapter | null>(null)
 const showOutline = ref(false)
 const showDetailOutline = ref(false)
 const currentBook = ref<Book | null>(null)
+const activeTab = ref<'chapters' | 'fragments'>('chapters')
 
 const handleChapterSelect = async (chapter: Chapter) => {
   if (chapter.type === 'chapter' && currentBook.value) {
@@ -65,6 +80,17 @@ const handleChapterSelect = async (chapter: Chapter) => {
       currentChapter.value = null
     }
   }
+}
+
+// 处理片段选择
+const handleFragmentSelect = (fragment: any) => {
+  // 这里可以处理片段的选择逻辑，例如在编辑器中显示片段内容
+  console.log('Selected fragment:', fragment)
+}
+
+// 处理标签页切换
+const handleSwitchTab = (tab: 'chapters' | 'fragments') => {
+  activeTab.value = tab
 }
 
 const handleChaptersUpdate = async (chapters: Chapter[]) => {
