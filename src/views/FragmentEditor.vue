@@ -38,6 +38,8 @@
       />
     </div>
     <div class="editor-footer">
+      <el-button type="success" size="small" @click="insertToEditor">插入原文</el-button>
+      <el-button type="warning" size="small" @click="replaceInEditor">替换原文</el-button>
       <el-button type="primary" size="small" @click="saveFragment">保存</el-button>
     </div>
   </div>
@@ -154,6 +156,36 @@ const cancelTitleEdit = () => {
   isEditingTitle.value = false
 }
 
+// 插入到编辑器
+const insertToEditor = () => {
+  try {
+    const message = {
+      type: 'insert-fragment',
+      content: fragment.value.content
+    }
+    window.electronAPI.sendToMainWindow(JSON.stringify(message))
+    ElMessage.success('已发送到编辑器')
+  } catch (error) {
+    console.error('发送到编辑器失败:', error)
+    ElMessage.error('发送失败')
+  }
+}
+
+// 替换编辑器中的选中内容
+const replaceInEditor = () => {
+  try {
+    const message = {
+      type: 'replace-fragment',
+      content: fragment.value.content
+    }
+    window.electronAPI.sendToMainWindow(JSON.stringify(message))
+    ElMessage.success('已发送到编辑器')
+  } catch (error) {
+    console.error('发送到编辑器失败:', error)
+    ElMessage.error('发送失败')
+  }
+}
+
 // 初始化
 onMounted(async () => {
   // 先设置数据接收监听器
@@ -173,6 +205,23 @@ onMounted(async () => {
   
   // 注册监听器
   window.electronAPI.onFragmentData(dataHandler);
+  
+  // 注册内容更新监听器
+  window.electronAPI.onContentUpdate((data: any) => {
+    // 如果ID不匹配，忽略此更新
+    if (data.id !== fragment.value.id) return;
+    
+    // 更新内容
+    fragment.value.content = data.content || fragment.value.content;
+    
+    // 更新标题
+    if (data.title) {
+      fragmentTitle.value = data.title;
+    }
+    
+    // 更新时间戳
+    fragment.value.updatedAt = new Date();
+  });
   
   try {
     // 获取当前窗口ID并请求数据
@@ -336,6 +385,7 @@ onUnmounted(() => {
 .editor-footer {
   display: flex;
   justify-content: center;
+  gap: 10px;
   padding: 5px 0;
   background-color: #f5f7fa;
 }

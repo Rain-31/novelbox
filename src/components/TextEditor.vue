@@ -50,6 +50,14 @@
       </div>
     </template>
   </div>
+  
+  <!-- 添加片段面板组件，但不直接显示 -->
+  <FragmentPane
+    ref="fragmentPaneRef"
+    :book-id="currentBook?.id || ''"
+    :current-book="currentBook"
+    style="display: none;"
+  />
 </template>
 
 <script setup lang="ts">
@@ -65,6 +73,7 @@ import Proofreader from './Proofreader.vue'
 import AITextContinueController from '../controllers/AITextContinueController'
 import AIChapterGenerateController from '../controllers/AIChapterGenerateController'
 import FloatingToolbarController from '../controllers/FloatingToolbarController'
+import FragmentPane from './FragmentPane.vue'
 
 
 const content = ref('')
@@ -83,10 +92,21 @@ const aiChapterGenerateController = new AIChapterGenerateController({
   }
 });
 
+// 片段面板引用
+const fragmentPaneRef = ref(null);
+
 // 浮动工具栏控制器
 const floatingToolbarController = new FloatingToolbarController({
   onContentSave: (chapterId, content) => {
     saveChapterContent(chapterId, content);
+  },
+  onShowFragment: (content, title) => {
+    // 调用片段面板的创建片段方法
+    if (fragmentPaneRef.value) {
+      fragmentPaneRef.value.createFragmentFromContent(content, title);
+    } else {
+      ElMessage.error('片段面板未初始化');
+    }
   }
 });
 
@@ -108,6 +128,51 @@ const calculateWordCount = () => {
 // 初始化AI生成按钮文本
 const initAIGenerateButton = () => {
   aiChapterGenerateController.initGenerateButton();
+}
+
+// 处理片段编辑器发来的消息
+const handleFragmentMessage = (message: string) => {
+  try {
+    const data = JSON.parse(message)
+    const editor = quillEditor.value?.getQuill()
+    if (!editor) return
+
+    // 使用updateContents方法确保操作被记录到历史中
+    if (data.type === 'insert-fragment') {
+      // 获取当前选区
+      const selection = editor.getSelection()
+      const index = selection ? selection.index : editor.getLength()
+      
+      // 创建Delta对象表示插入操作
+      const delta = new Delta().retain(index).insert(data.content)
+      
+      // 应用更改并记录到历史中
+      editor.updateContents(delta, 'user')
+      editor.setSelection(index, data.content.length)
+    } else if (data.type === 'replace-fragment') {
+      // 获取当前选区
+      const selection = editor.getSelection()
+      if (selection && selection.length > 0) {
+        // 创建Delta对象表示替换操作
+        const delta = new Delta()
+          .retain(selection.index)
+          .delete(selection.length)
+          .insert(data.content)
+        
+        // 应用更改并记录到历史中
+        editor.updateContents(delta, 'user')
+        editor.setSelection(selection.index, data.content.length)
+      } else {
+        // 如果没有选中内容，在光标位置插入
+        const index = selection ? selection.index : editor.getLength()
+        const delta = new Delta().retain(index).insert(data.content)
+        editor.updateContents(delta, 'user')
+        editor.setSelection(index, data.content.length)
+      }
+    }
+  } catch (error) {
+    console.error('处理片段消息失败:', error)
+  }
 }
 
 // 处理扩写选中文本
@@ -139,6 +204,11 @@ onMounted(() => {
   nextTick(() => {
     initAIGenerateButton()
   })
+
+  // 添加对片段编辑器消息的处理
+  if (window.electronAPI) {
+    window.electronAPI.onFragmentMessage(handleFragmentMessage)
+  }
 })
 
 // 使用防抖处理，避免频繁保存，设置2秒延迟

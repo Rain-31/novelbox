@@ -1,13 +1,23 @@
+// 移除全局声明，我们将在代码中进行运行时检查
 import { Ref, ref } from 'vue';
-import Delta from 'quill-delta';
 import { ElMessage } from 'element-plus';
 import AIService from '../services/aiService';
 import { AIConfigService } from '../services/aiConfigService';
 import { type Book, type Chapter } from '../services/bookConfigService';
 import { replaceExpandPromptVariables, replaceRewritePromptVariables, replaceAbbreviatePromptVariables } from '../services/promptVariableService';
 
+// 这个接口必须保持与FragmentPane中类似的定义，确保兼容
+interface StreamingFragment {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface FloatingToolbarOptions {
   onContentSave: (chapterId: string, content: string) => void;
+  onShowFragment?: (content: string, title: string) => void;
 }
 
 export default class FloatingToolbarController {
@@ -17,9 +27,13 @@ export default class FloatingToolbarController {
   private showRewriteInput: Ref<boolean> = ref(false);
   private rewriteContent: Ref<string> = ref('');
   private saveContentCallback: (chapterId: string, content: string) => void;
+  private showFragmentCallback: (content: string, title: string) => void;
+  // 当前流式生成的片段窗口信息
+  private currentStreamingFragment: StreamingFragment | null = null;
 
   constructor(options: FloatingToolbarOptions) {
     this.saveContentCallback = options.onContentSave;
+    this.showFragmentCallback = options.onShowFragment || ((content: string, title: string) => {});
   }
 
   get showFloatingToolbarValue(): boolean {
@@ -150,6 +164,63 @@ export default class FloatingToolbarController {
     }, 0);
   }
 
+  // 创建或更新流式片段窗口
+  private async showStreamingFragment(content: string, baseTitle: string, isFirst: boolean = false, isComplete: boolean = false): Promise<void> {
+    const title = isComplete ? baseTitle : `${baseTitle}（生成中...）`;
+    
+    // 如果是首次创建，初始化片段信息
+    if (isFirst || !this.currentStreamingFragment) {
+      this.currentStreamingFragment = {
+        id: `streaming-${Date.now()}`,
+        title: title,
+        content: content,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // 检查是否在Electron环境中
+      if (window.electronAPI) {
+        try {
+          // 直接使用electronAPI创建窗口，绕过标准回调
+          await window.electronAPI.createFragmentWindow(this.currentStreamingFragment);
+        } catch (error) {
+          console.error('创建流式片段窗口失败:', error);
+          ElMessage.error('创建片段窗口失败');
+          // 如果创建窗口失败，使用回退方案
+          this.showFragmentCallback(content, title);
+        }
+      } else {
+        // 不在Electron环境中，使用标准回调
+        this.showFragmentCallback(content, title);
+      }
+    } else {
+      // 更新已有片段内容
+      this.currentStreamingFragment.content = content;
+      this.currentStreamingFragment.title = title;
+      this.currentStreamingFragment.updatedAt = new Date().toISOString();
+
+      // 检查是否在Electron环境中
+      if (window.electronAPI) {
+        try {
+          // 使用updateFragmentContent更新窗口内容
+          await window.electronAPI.updateFragmentContent(this.currentStreamingFragment);
+        } catch (error) {
+          console.error('更新流式片段窗口失败:', error);
+          // 如果更新失败，使用回退方案
+          this.showFragmentCallback(content, title);
+        }
+      } else {
+        // 不在Electron环境中，使用标准回调
+        this.showFragmentCallback(content, title);
+      }
+    }
+
+    // 如果生成完成，重置片段信息
+    if (isComplete) {
+      this.currentStreamingFragment = null;
+    }
+  }
+
   // 扩写选中文本
   async expandSelectedText(quill: any, currentChapter: any, currentBook: Book | null): Promise<void> {
     if (!this.selectedTextRange.value) return;
@@ -188,21 +259,26 @@ export default class FloatingToolbarController {
     );
 
     try {
-      const response = await aiService.generateText(prompt);
-      if (response.error) {
+      // 显示初始的空片段窗口
+      await this.showStreamingFragment('', '扩写内容', true, false);
+      let content = '';
+      
+      // 使用流式请求
+      const response = await aiService.generateText(prompt, (text, error, complete) => {
+        if (error) {
+          ElMessage.error(`AI扩写失败：${error}`);
+          return;
+        }
+        
+        // 累积内容
+        content += text;
+        
+        // 更新片段窗口内容
+        this.showStreamingFragment(content, '扩写内容', false, complete);
+      });
+      
+      if ('error' in response && response.error) {
         ElMessage.error(`AI扩写失败：${response.error}`);
-        return;
-      }
-      const text = response.text;
-      quill.updateContents(
-        new Delta()
-          .retain(this.selectedTextRange.value.index)
-          .delete(this.selectedTextRange.value.length)
-          .insert(text),
-        'user'
-      );
-      if (currentChapter?.id) {
-        this.saveContentCallback(currentChapter.id, quill.root.innerHTML);
       }
     } catch (error) {
       console.error('AI扩写失败:', error);
@@ -231,21 +307,26 @@ export default class FloatingToolbarController {
         selectedText
       );
 
-      const response = await aiService.generateText(prompt);
-      if (response.error) {
+      // 显示初始的空片段窗口
+      await this.showStreamingFragment('', '缩写内容', true, false);
+      let content = '';
+      
+      // 使用流式请求
+      const response = await aiService.generateText(prompt, (text, error, complete) => {
+        if (error) {
+          ElMessage.error(`AI缩写失败：${error}`);
+          return;
+        }
+        
+        // 累积内容
+        content += text;
+        
+        // 更新片段窗口内容
+        this.showStreamingFragment(content, '缩写内容', false, complete);
+      });
+      
+      if ('error' in response && response.error) {
         ElMessage.error(`AI缩写失败：${response.error}`);
-        return;
-      }
-      const text = response.text;
-      quill.updateContents(
-        new Delta()
-          .retain(this.selectedTextRange.value.index)
-          .delete(this.selectedTextRange.value.length)
-          .insert(text),
-        'user'
-      );
-      if (currentChapter?.id) {
-        this.saveContentCallback(currentChapter.id, quill.root.innerHTML);
       }
     } catch (error) {
       console.error('AI缩写失败:', error);
@@ -277,36 +358,34 @@ export default class FloatingToolbarController {
       );
 
       try {
-        const response = await aiService.generateText(prompt);
-        if (response.error) {
-          ElMessage.error(`AI改写失败：${response.error}`);
-          return;
-        }
-        const text = response.text;
-        
         // 先清除高亮效果
         quill.formatText(tempIndex, tempLength, {
           'background': false,
           'color': false,
         });
         
-        // 然后更新内容
-        quill.updateContents(
-          new Delta()
-            .retain(tempIndex)
-            .delete(tempLength)
-            .insert(text),
-          'user'
-        );
+        quill.setSelection(tempIndex, tempLength, 'user');
+
+        // 显示初始的空片段窗口
+        await this.showStreamingFragment('', '改写内容', true, false);
+        let content = '';
         
-        // 在内容更新后重新设置选中状态
-        setTimeout(() => {
-          quill.setSelection(tempIndex, text.length, 'user');
-          this.cleanupRewriteState(quill);
-        }, 0);
+        // 使用流式请求
+        const response = await aiService.generateText(prompt, (text, error, complete) => {
+          if (error) {
+            ElMessage.error(`AI改写失败：${error}`);
+            return;
+          }
+          
+          // 累积内容
+          content += text;
+          
+          // 更新片段窗口内容
+          this.showStreamingFragment(content, '改写内容', false, complete);
+        });
         
-        if (currentChapter?.id) {
-          this.saveContentCallback(currentChapter.id, quill.root.innerHTML);
+        if ('error' in response && response.error) {
+          ElMessage.error(`AI改写失败：${response.error}`);
         }
       } catch (error) {
         console.error('AI改写失败:', error);

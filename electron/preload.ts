@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // 片段编辑窗口操作
   createFragmentWindow: (fragment: any) => ipcRenderer.invoke('create-fragment-window', fragment),
+  updateFragmentContent: (fragment: any) => ipcRenderer.invoke('update-fragment-content', fragment),
   closeFragmentWindow: (fragmentId: string) => ipcRenderer.send('close-fragment-window', fragmentId),
   minimizeFragmentWindow: (fragmentId: string) => ipcRenderer.send('minimize-fragment-window', fragmentId),
   saveFragmentContent: (fragment: any) => ipcRenderer.invoke('save-fragment-content', fragment),
@@ -45,7 +46,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   requestFragmentData: (windowId: number) => ipcRenderer.invoke('request-fragment-data', windowId),
   
   // 新增：获取当前窗口ID
-  getCurrentWindowId: () => ipcRenderer.invoke('get-current-window-id')
+  getCurrentWindowId: () => ipcRenderer.invoke('get-current-window-id'),
+  
+  // 新增：向主窗口发送消息
+  sendToMainWindow: (channel: string, ...args: any[]) => ipcRenderer.send('send-to-main-window', channel, ...args),
+  
+  // 新增：监听片段消息
+  onFragmentMessage: (callback: (message: string) => void) => ipcRenderer.on('fragment-message', (_event, message) => callback(message)),
+  
+  // 新增：监听内容更新消息
+  onContentUpdate: (callback: (fragment: any) => void) => ipcRenderer.on('content-update', (_event, fragment) => callback(fragment))
 });
 
 // 监听来自主进程的菜单事件

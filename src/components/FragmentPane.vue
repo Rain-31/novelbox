@@ -50,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { v4 as uuidv4 } from 'uuid'
@@ -78,6 +78,33 @@ const getPreview = (content: string): string => {
   return content.length > 50 ? content.substring(0, 50) + '...' : content
 }
 
+// 监听片段保存事件
+onMounted(() => {
+  // 确保只注册一次事件监听器
+  window.electronAPI.onFragmentSaved((savedFragment) => {
+    // 保存片段到列表
+    const index = fragments.value.findIndex(f => f.id === savedFragment.id)
+    if (index > -1) {
+      fragments.value[index] = savedFragment
+    } else {
+      fragments.value.push(savedFragment)
+    }
+    // 保存到小说文件
+    saveFragmentsToBook()
+    
+    // 自动切换到片段栏
+    emit('switch-tab', 'fragments')
+    
+    // 尝试直接调用父窗口的方法切换到片段栏
+    try {
+      // 在主进程中向主窗口发送消息
+      window.electronAPI.sendToMainWindow('switch-to-fragments');
+    } catch (error) {
+      console.error('无法切换到片段栏:', error)
+    }
+  })
+})
+
 // 创建新的浮动片段
 const createFloatingFragment = async () => {
   if (!props.currentBook) {
@@ -100,20 +127,31 @@ const createFloatingFragment = async () => {
     if (!result.success) {
       ElMessage.error(`创建片段窗口失败: ${result.error?.message || '未知错误'}`)
     }
-    
-    // 监听片段保存事件
-    window.electronAPI.onFragmentSaved((savedFragment) => {
-      console.log("onFragmentSaved", savedFragment)
-      // 保存片段到列表
-      const index = fragments.value.findIndex(f => f.id === savedFragment.id)
-      if (index > -1) {
-        fragments.value[index] = savedFragment
-      } else {
-        fragments.value.push(savedFragment)
-      }
-      // 保存到小说文件
-      saveFragmentsToBook()
-    })
+  } catch (error) {
+    console.error('创建片段窗口失败:', error)
+    ElMessage.error('创建窗口失败')
+  }
+}
+
+// 从AI生成内容创建片段
+const createFragmentFromContent = (content: string, title: string) => {
+  if (!props.currentBook) {
+    ElMessage.error('当前没有打开的书籍')
+    return
+  }
+
+  // 创建新片段
+  const newFragment = {
+    id: uuidv4(),
+    title: title || '新片段',
+    content: content,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+  
+  try {
+    // 使用Electron API创建真正的独立窗口
+    window.electronAPI.createFragmentWindow(newFragment)
   } catch (error) {
     console.error('创建片段窗口失败:', error)
     ElMessage.error('创建窗口失败')
@@ -136,9 +174,6 @@ const selectFragment = (fragment: Fragment) => {
       createdAt: fragment.createdAt, 
       updatedAt: fragment.updatedAt
     }
-    
-    // 添加调试日志
-    console.log('传递给窗口的片段数据:', JSON.stringify(serializable))
     
     window.electronAPI.createFragmentWindow(serializable)
   } catch (error) {
@@ -198,6 +233,11 @@ import { watch } from 'vue'
 watch(() => props.currentBook, () => {
   loadFragments()
 }, { immediate: true, deep: true })
+
+// 导出方法供外部使用
+defineExpose({
+  createFragmentFromContent
+})
 </script>
 
 <style scoped>

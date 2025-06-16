@@ -28,11 +28,13 @@ interface ElectronAPI {
   
   // 片段编辑窗口操作
   createFragmentWindow: (fragment: any) => Promise<{ success: boolean, message: string, error?: {message: string, code: string} }>;
+  updateFragmentContent: (fragment: any) => Promise<{ success: boolean, message: string, error?: {message: string, code: string} }>;
   closeFragmentWindow: (fragmentId: string) => void;
   minimizeFragmentWindow: (fragmentId: string) => void;
   saveFragmentContent: (fragment: any) => Promise<{ success: boolean, message: string, error?: {message: string, code: string} }>;
   onFragmentSaved: (callback: (fragment: any) => void) => void;
   onFragmentData: (callback: (fragment: any) => void) => void;
+  onContentUpdate: (callback: (fragment: any) => void) => void;
   startDrag: () => void;
   closeCurrentWindow: () => void;
   
@@ -41,6 +43,12 @@ interface ElectronAPI {
   
   // 新增：获取当前窗口ID
   getCurrentWindowId: () => Promise<{ success: boolean, id?: number, message?: string }>;
+  
+  // 新增：向主窗口发送消息
+  sendToMainWindow: (channel: string, ...args: any[]) => void;
+  
+  // 新增：监听片段消息
+  onFragmentMessage: (callback: (message: string) => void) => void;
 }
 
 interface Window {

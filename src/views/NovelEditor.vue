@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onBeforeUnmount } from 'vue'
 import OutlinePanel from '../components/OutlinePanel.vue'
 import OutlineDetail from '../components/OutlineDetail.vue'
 import { useRouter } from 'vue-router'
@@ -154,6 +154,22 @@ onMounted(async () => {
     } catch (e) {
       console.error('获取书籍信息失败', e)
     }
+  }
+  
+  // 监听从主进程发来的切换到片段栏的消息
+  if (window.electronAPI) {
+    // 注册一个监听器，监听switch-to-fragments事件
+    const switchToFragmentsHandler = () => {
+      activeTab.value = 'fragments';
+    };
+    
+    // 自定义事件监听
+    document.addEventListener('switch-to-fragments', switchToFragmentsHandler);
+    
+    // 清理函数
+    onBeforeUnmount(() => {
+      document.removeEventListener('switch-to-fragments', switchToFragmentsHandler);
+    });
   }
 })
 

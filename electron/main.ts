@@ -582,6 +582,49 @@ ipcMain.handle('create-fragment-window', async (_event, fragment: any) => {
   }
 });
 
+// 更新片段窗口内容
+ipcMain.handle('update-fragment-content', async (_event, fragment: any) => {
+  try {
+    // 检查窗口是否存在
+    if (!fragmentWindows.has(fragment.id)) {
+      return { success: false, message: '找不到对应的片段窗口' };
+    }
+
+    const fragmentWindow = fragmentWindows.get(fragment.id);
+    if (!fragmentWindow || fragmentWindow.isDestroyed()) {
+      return { success: false, message: '片段窗口已销毁' };
+    }
+
+    // 存储更新后的片段数据
+    const oldFragment = pendingFragmentData.get(fragmentWindow.id);
+    if (oldFragment) {
+      pendingFragmentData.set(fragmentWindow.id, {
+        ...oldFragment,
+        content: fragment.content,
+        title: fragment.title,
+      });
+    }
+
+    // 向窗口发送内容更新消息
+    fragmentWindow.webContents.send('content-update', {
+      id: fragment.id,
+      content: fragment.content,
+      title: fragment.title
+    });
+
+    return { success: true, message: '片段内容已更新' };
+  } catch (error: any) {
+    console.error('更新片段窗口内容失败:', error);
+    return {
+      success: false,
+      error: {
+        message: error.message,
+        code: error.code
+      }
+    };
+  }
+});
+
 // 新增：响应渲染进程请求片段数据
 ipcMain.handle('request-fragment-data', (_event, windowId: number) => {
   try {
@@ -678,5 +721,40 @@ ipcMain.on('window-drag', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win) {
     win.moveTop(); // 确保窗口在最前面
+  }
+});
+
+// 处理从片段窗口发送到主窗口的消息
+ipcMain.on('send-to-main-window', (_event, channel, ...args) => {
+  try {
+    // 获取所有非片段窗口（主窗口）
+    const mainWindows = BrowserWindow.getAllWindows().filter(win => {
+      // 检查窗口ID是否在fragmentWindows映射中
+      const isFragmentWindow = Array.from(fragmentWindows.values()).some(fw => fw.id === win.id);
+      return !isFragmentWindow;
+    });
+    
+    // 将消息转发给主窗口
+    if (mainWindows.length > 0) {
+      const mainWindow = mainWindows[0]; // 假设只有一个主窗口
+      if (!mainWindow.isDestroyed()) {
+        // 处理片段编辑器的特殊消息类型
+        if (typeof channel === 'string' && channel.startsWith('{')) {
+          try {
+            // 如果channel是JSON字符串，则通过fragment-message发送
+            mainWindow.webContents.send('fragment-message', channel);
+          } catch (err) {
+            console.error('发送fragment-message失败:', err);
+          }
+        } else {
+          // 使用原来的方式，通过executeJavaScript执行自定义事件
+          mainWindow.webContents.executeJavaScript(`
+            document.dispatchEvent(new CustomEvent('${channel}', { detail: ${JSON.stringify(args)} }));
+          `).catch(err => console.error('执行脚本失败:', err));
+        }
+      }
+    }
+  } catch (error) {
+    console.error('转发消息到主窗口失败:', error);
   }
 });

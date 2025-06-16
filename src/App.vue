@@ -43,7 +43,6 @@ import { ref, onMounted, computed } from 'vue'
 import AIConfigModal from './components/AIConfigModal.vue'
 import About from './views/About.vue'
 import Settings from './views/Settings.vue'
-import FloatingEditor from './components/FloatingEditor.vue'
 import { floatingWindowService } from './services/floatingWindowService'
 
 const showAIConfigModal = ref(false)
