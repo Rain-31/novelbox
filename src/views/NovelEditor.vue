@@ -32,7 +32,9 @@
         <FragmentPane 
           v-else 
           :bookId="currentBook?.id || ''" 
+          :currentBook="currentBook"
           @switch-tab="handleSwitchTab"
+          @update:book="handleBookUpdate"
         />
       </div>
       <div class="editor-content">
@@ -122,6 +124,18 @@ const handleSaveContent = async (chapterId: string, content: string) => {
   currentBook.value = {
     ...currentBook.value,
     content: updateChapters(currentBook.value.content),
+    lastEdited: new Date()
+  }
+
+  await BookConfigService.saveBook(currentBook.value)
+}
+
+const handleBookUpdate = async (book: Book) => {
+  if (!currentBook.value) return
+
+  currentBook.value = {
+    ...currentBook.value,
+    ...book,
     lastEdited: new Date()
   }
 

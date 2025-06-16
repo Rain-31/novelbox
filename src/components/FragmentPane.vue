@@ -55,20 +55,14 @@ import { ElMessage } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { v4 as uuidv4 } from 'uuid'
 import SidebarToggle from './SidebarToggle.vue'
-
-interface Fragment {
-  id: string
-  title: string
-  content: string
-  createdAt: Date
-  updatedAt: Date
-}
+import { BookConfigService, type Fragment, type Book } from '../services/bookConfigService'
 
 const props = defineProps<{
   bookId: string
+  currentBook: Book | null
 }>()
 
-const emit = defineEmits(['select-fragment', 'switch-tab'])
+const emit = defineEmits(['select-fragment', 'switch-tab', 'update:book'])
 
 const fragments = ref<Fragment[]>([])
 const selectedFragmentId = ref<string | null>(null)
@@ -86,12 +80,17 @@ const getPreview = (content: string): string => {
 
 // 创建新的浮动片段
 const createFloatingFragment = async () => {
+  if (!props.currentBook) {
+    ElMessage.error('当前没有打开的书籍')
+    return
+  }
+
   const newFragment = {
     id: uuidv4(),
     title: '新片段',
     content: '',
-    createdAt: new Date(),
-    updatedAt: new Date()
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   }
   
   try {
@@ -112,8 +111,8 @@ const createFloatingFragment = async () => {
       } else {
         fragments.value.push(savedFragment)
       }
-      // 保存到存储
-      saveFragmentsToStorage()
+      // 保存到小说文件
+      saveFragmentsToBook()
     })
   } catch (error) {
     console.error('创建片段窗口失败:', error)
@@ -134,12 +133,8 @@ const selectFragment = (fragment: Fragment) => {
       id: fragment.id || uuidv4(),
       title: fragment.title,      // 确保标题被包含
       content: fragment.content,
-      createdAt: fragment.createdAt instanceof Date 
-        ? fragment.createdAt.toISOString() 
-        : fragment.createdAt,
-      updatedAt: fragment.updatedAt instanceof Date 
-        ? fragment.updatedAt.toISOString() 
-        : fragment.updatedAt
+      createdAt: fragment.createdAt, 
+      updatedAt: fragment.updatedAt
     }
     
     // 添加调试日志
@@ -154,10 +149,12 @@ const selectFragment = (fragment: Fragment) => {
 
 // 删除片段
 const removeFragment = (fragment: Fragment) => {
+  if (!props.currentBook) return
+
   const index = fragments.value.findIndex(f => f.id === fragment.id)
   if (index > -1) {
     fragments.value.splice(index, 1)
-    saveFragmentsToStorage()
+    saveFragmentsToBook()
     ElMessage.success('片段已删除')
     
     if (selectedFragmentId.value === fragment.id) {
@@ -166,26 +163,41 @@ const removeFragment = (fragment: Fragment) => {
   }
 }
 
-// 保存片段到存储
-const saveFragmentsToStorage = () => {
-  // TODO: 实现持久化存储
-  localStorage.setItem(`fragments_${props.bookId}`, JSON.stringify(fragments.value))
-}
+// 保存片段到书籍
+const saveFragmentsToBook = async () => {
+  if (!props.currentBook) return
 
-// 加载片段
-const loadFragments = () => {
   try {
-    const savedFragments = localStorage.getItem(`fragments_${props.bookId}`)
-    if (savedFragments) {
-      fragments.value = JSON.parse(savedFragments)
+    const updatedBook: Book = {
+      ...props.currentBook,
+      fragments: fragments.value,
+      lastEdited: new Date()
     }
+    
+    await BookConfigService.saveBook(updatedBook)
+    emit('update:book', updatedBook)
   } catch (error) {
-    console.error('加载片段失败:', error)
+    console.error('保存片段失败:', error)
+    ElMessage.error('保存片段失败')
   }
 }
 
-// 初始加载
-loadFragments()
+// 从书籍加载片段
+const loadFragments = () => {
+  if (!props.currentBook) return
+  
+  if (props.currentBook.fragments && props.currentBook.fragments.length > 0) {
+    fragments.value = props.currentBook.fragments
+  } else {
+    fragments.value = []
+  }
+}
+
+// 监听书籍变化，重新加载片段
+import { watch } from 'vue'
+watch(() => props.currentBook, () => {
+  loadFragments()
+}, { immediate: true, deep: true })
 </script>
 
 <style scoped>

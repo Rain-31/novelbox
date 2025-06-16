@@ -14,6 +14,14 @@ export interface Chapter {
   children?: Chapter[];
 }
 
+export interface Fragment {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Book {
   id: string;
   title: string;
@@ -21,6 +29,7 @@ export interface Book {
   setting: string;
   plot: string;
   content: Chapter[];
+  fragments?: Fragment[];
   lastEdited: Date;
 }
 
