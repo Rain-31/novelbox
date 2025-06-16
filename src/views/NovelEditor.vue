@@ -32,7 +32,6 @@
         <FragmentPane 
           v-else 
           :bookId="currentBook?.id || ''" 
-          @select-fragment="handleFragmentSelect"
           @switch-tab="handleSwitchTab"
         />
       </div>
@@ -80,12 +79,6 @@ const handleChapterSelect = async (chapter: Chapter) => {
       currentChapter.value = null
     }
   }
-}
-
-// 处理片段选择
-const handleFragmentSelect = (fragment: any) => {
-  // 这里可以处理片段的选择逻辑，例如在编辑器中显示片段内容
-  console.log('Selected fragment:', fragment)
 }
 
 // 处理标签页切换

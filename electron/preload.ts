@@ -29,7 +29,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onOpenAboutPage: (callback: () => void) => ipcRenderer.on('open-about-page', () => callback()),
   
   // 系统操作
-  openExternal: (url: string) => ipcRenderer.send('open-external', url)
+  openExternal: (url: string) => ipcRenderer.send('open-external', url),
+  
+  // 片段编辑窗口操作
+  createFragmentWindow: (fragment: any) => ipcRenderer.invoke('create-fragment-window', fragment),
+  closeFragmentWindow: (fragmentId: string) => ipcRenderer.send('close-fragment-window', fragmentId),
+  minimizeFragmentWindow: (fragmentId: string) => ipcRenderer.send('minimize-fragment-window', fragmentId),
+  saveFragmentContent: (fragment: any) => ipcRenderer.invoke('save-fragment-content', fragment),
+  onFragmentSaved: (callback: (fragment: any) => void) => ipcRenderer.on('fragment-saved', (_event, fragment) => callback(fragment)),
+  onFragmentData: (callback: (fragment: any) => void) => ipcRenderer.on('fragment-data', (_event, fragment) => callback(fragment)),
+  startDrag: () => ipcRenderer.send('window-drag'),
+  closeCurrentWindow: () => ipcRenderer.send('close-current-window'),
+  
+  // 新增：通知主进程渲染进程已准备好接收片段数据
+  requestFragmentData: (windowId: number) => ipcRenderer.invoke('request-fragment-data', windowId),
+  
+  // 新增：获取当前窗口ID
+  getCurrentWindowId: () => ipcRenderer.invoke('get-current-window-id')
 });
 
 // 监听来自主进程的菜单事件

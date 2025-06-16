@@ -6,12 +6,14 @@
         @toggle="handleToggle" 
       />
       <div class="action-buttons">
-        <el-button class="action-button" circle>
+        <!-- <el-button class="action-button" circle>
           <el-icon><Document /></el-icon>
-        </el-button>
-        <el-button class="action-button" @click="addFragment" circle>
+        </el-button> -->
+        <el-tooltip content="添加片段" placement="top">
+        <el-button class="action-button" @click="createFloatingFragment" circle>
           <el-icon><Plus /></el-icon>
         </el-button>
+        </el-tooltip>
       </div>
     </div>
     <div class="fragment-list">
@@ -27,11 +29,11 @@
           <div class="fragment-preview">{{ getPreview(fragment.content) }}</div>
         </div>
         <div class="fragment-actions">
-          <el-tooltip content="编辑" placement="top">
+          <!-- <el-tooltip content="编辑" placement="top">
             <el-button circle size="small" @click.stop="editFragment(fragment)">
               <el-icon><Edit /></el-icon>
             </el-button>
-          </el-tooltip>
+          </el-tooltip> -->
           <el-tooltip content="删除" placement="top">
             <el-button circle size="small" type="danger" @click.stop="removeFragment(fragment)">
               <el-icon><Delete /></el-icon>
@@ -44,34 +46,13 @@
       </div>
     </div>
     
-    <el-dialog v-model="dialogVisible" title="编辑片段" width="500px">
-      <el-form :model="currentFragment" label-position="top">
-        <el-form-item label="标题">
-          <el-input v-model="currentFragment.title" placeholder="片段标题" />
-        </el-form-item>
-        <el-form-item label="内容">
-          <el-input 
-            v-model="currentFragment.content" 
-            type="textarea" 
-            :rows="8"
-            placeholder="片段内容" 
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="saveFragment">保存</el-button>
-        </span>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Document } from '@element-plus/icons-vue'
+import { Plus, Delete } from '@element-plus/icons-vue'
 import { v4 as uuidv4 } from 'uuid'
 import SidebarToggle from './SidebarToggle.vue'
 
@@ -91,15 +72,6 @@ const emit = defineEmits(['select-fragment', 'switch-tab'])
 
 const fragments = ref<Fragment[]>([])
 const selectedFragmentId = ref<string | null>(null)
-const dialogVisible = ref(false)
-const currentFragment = ref<Fragment>({
-  id: '',
-  title: '',
-  content: '',
-  createdAt: new Date(),
-  updatedAt: new Date()
-})
-const isEditing = ref(false)
 
 // 处理切换
 const handleToggle = (tab: 'chapters' | 'fragments') => {
@@ -112,56 +84,72 @@ const getPreview = (content: string): string => {
   return content.length > 50 ? content.substring(0, 50) + '...' : content
 }
 
-// 添加新片段
-const addFragment = () => {
-  isEditing.value = false
-  currentFragment.value = {
+// 创建新的浮动片段
+const createFloatingFragment = async () => {
+  const newFragment = {
     id: uuidv4(),
-    title: '',
+    title: '新片段',
     content: '',
     createdAt: new Date(),
     updatedAt: new Date()
   }
-  dialogVisible.value = true
-}
-
-// 编辑片段
-const editFragment = (fragment: Fragment) => {
-  isEditing.value = true
-  currentFragment.value = { ...fragment }
-  dialogVisible.value = true
-}
-
-// 保存片段
-const saveFragment = () => {
-  if (!currentFragment.value.title.trim()) {
-    ElMessage.warning('标题不能为空')
-    return
-  }
   
-  if (isEditing.value) {
-    // 更新现有片段
-    const index = fragments.value.findIndex(f => f.id === currentFragment.value.id)
-    if (index > -1) {
-      currentFragment.value.updatedAt = new Date()
-      fragments.value[index] = { ...currentFragment.value }
+  try {
+    // 使用Electron API创建真正的独立窗口
+    const result = await window.electronAPI.createFragmentWindow(newFragment)
+    
+    if (!result.success) {
+      ElMessage.error(`创建片段窗口失败: ${result.error?.message || '未知错误'}`)
     }
-  } else {
-    // 添加新片段
-    fragments.value.push({ ...currentFragment.value })
+    
+    // 监听片段保存事件
+    window.electronAPI.onFragmentSaved((savedFragment) => {
+      console.log("onFragmentSaved", savedFragment)
+      // 保存片段到列表
+      const index = fragments.value.findIndex(f => f.id === savedFragment.id)
+      if (index > -1) {
+        fragments.value[index] = savedFragment
+      } else {
+        fragments.value.push(savedFragment)
+      }
+      // 保存到存储
+      saveFragmentsToStorage()
+    })
+  } catch (error) {
+    console.error('创建片段窗口失败:', error)
+    ElMessage.error('创建窗口失败')
   }
-  
-  // TODO: 保存到持久化存储
-  saveFragmentsToStorage()
-  
-  dialogVisible.value = false
-  ElMessage.success(isEditing.value ? '片段已更新' : '片段已添加')
 }
 
 // 选择片段
 const selectFragment = (fragment: Fragment) => {
   selectedFragmentId.value = fragment.id
   emit('select-fragment', fragment)
+  
+  // 打开片段窗口
+  try {
+    // 创建纯JavaScript对象副本，确保可序列化
+    const serializable = {
+      // 确保ID不为空，如果为空则生成一个
+      id: fragment.id || uuidv4(),
+      title: fragment.title,      // 确保标题被包含
+      content: fragment.content,
+      createdAt: fragment.createdAt instanceof Date 
+        ? fragment.createdAt.toISOString() 
+        : fragment.createdAt,
+      updatedAt: fragment.updatedAt instanceof Date 
+        ? fragment.updatedAt.toISOString() 
+        : fragment.updatedAt
+    }
+    
+    // 添加调试日志
+    console.log('传递给窗口的片段数据:', JSON.stringify(serializable))
+    
+    window.electronAPI.createFragmentWindow(serializable)
+  } catch (error) {
+    console.error('打开片段窗口失败:', error)
+    ElMessage.error('打开片段窗口失败')
+  }
 }
 
 // 删除片段
