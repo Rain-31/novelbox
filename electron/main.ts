@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell, globalShortcut } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell, globalShortcut, screen } from 'electron'
 import { enable } from '@electron/remote/main'
 import * as path from 'path'
 import * as fs from 'fs/promises';
@@ -8,6 +8,72 @@ const fragmentWindows = new Map<string, BrowserWindow>();
 
 // 存储等待发送的片段数据
 const pendingFragmentData = new Map<number, any>();
+
+// 窗口焦点状态位图，用于跟踪所有窗口的焦点状态
+// key: windowId, value: 是否有焦点
+const windowFocusStateBitmap = new Map<string, boolean>();
+
+// 跟踪应用全局焦点状态
+let hasAnyWindowFocus = true;
+
+// 管理片段窗口可见性
+function updateAllWindowsAlwaysOnTop(hasAppFocus: boolean) {
+  // 更新所有片段窗口的可见性
+  fragmentWindows.forEach((window) => {
+    if (!window.isDestroyed()) {
+      
+      // 根据应用焦点状态控制窗口可见性
+      if (!hasAppFocus) {
+        try {
+          // 应用失去焦点时，最小化所有片段窗口
+          if (window.isVisible()) {
+            window.hide();
+          }
+        } catch (e) {
+          console.error('隐藏窗口失败:', e);
+        }
+      } else {
+        // 应用获得焦点时，恢复所有片段窗口
+        if (!window.isVisible()) {
+          window.show();
+        }
+      }
+    }
+  });
+}
+
+/**
+ * 检测鼠标是否在应用程序区域内
+ * @returns {boolean} 如果鼠标在窗口内返回true，否则返回false
+ */
+function isMouseInAppWindows(): boolean {
+  try {
+    // 获取当前鼠标在屏幕上的位置
+    const mousePosition = screen.getCursorScreenPoint();
+    
+    // 检查所有窗口
+    const allWindows = BrowserWindow.getAllWindows();
+    
+    for (const win of allWindows) {
+      if (win.isDestroyed() || !win.isVisible() || win.isMinimized()) continue;
+      
+      const bounds = win.getBounds();
+      if (
+        mousePosition.x >= bounds.x && 
+        mousePosition.x <= bounds.x + bounds.width &&
+        mousePosition.y >= bounds.y && 
+        mousePosition.y <= bounds.y + bounds.height
+      ) {
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('检测鼠标位置失败:', error);
+    return false;
+  }
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -24,6 +90,52 @@ function createWindow() {
     icon: path.join(__dirname, '../public/icon.ico')
   })
 
+  // 监听主窗口焦点事件
+  win.on('focus', () => {
+    if (!win.isVisible()) {
+      return;
+    }
+
+    // 更新主窗口焦点状态
+    const mainWindowId = 'main-' + win.id;
+    windowFocusStateBitmap.set(mainWindowId, true);
+    
+    // 检查是否有任何窗口有焦点
+    let hasAnyFocus = false;
+    windowFocusStateBitmap.forEach((hasFocus, _id) => {
+      if (hasFocus) {
+        hasAnyFocus = true;
+      }
+    });
+    
+    if (!hasAnyWindowFocus && hasAnyFocus) {
+      hasAnyWindowFocus = true;
+      updateAllWindowsAlwaysOnTop(true);
+    }
+  });
+  
+  // 监听主窗口失去焦点事件
+  win.on('blur', () => {
+    // 更新主窗口焦点状态
+    const mainWindowId = 'main-' + win.id;
+    windowFocusStateBitmap.set(mainWindowId, false);
+    
+    if (!isMouseInAppWindows()) {
+      // 检查是否所有窗口都失去了焦点
+      let hasAnyFocus = false;
+      windowFocusStateBitmap.forEach((hasFocus, _id) => {
+        if (hasFocus) {
+          hasAnyFocus = true;
+        }
+      });
+      
+      if (hasAnyWindowFocus && !hasAnyFocus) {
+        hasAnyWindowFocus = false;
+        updateAllWindowsAlwaysOnTop(false);
+      }
+    }
+  });
+
   // 监听主窗口关闭事件，同时关闭所有片段窗口
   win.on('close', () => {
     // 关闭所有片段窗口
@@ -36,8 +148,8 @@ function createWindow() {
   win.on('minimize', () => {
     // 最小化所有片段窗口
     fragmentWindows.forEach((window) => {
-      if (!window.isDestroyed() && window.isVisible()) {
-        window.minimize();
+      if (window.isVisible()) {
+        window.hide();
       }
     });
   });
@@ -46,8 +158,8 @@ function createWindow() {
   win.on('restore', () => {
     // 恢复所有片段窗口
     fragmentWindows.forEach((window) => {
-      if (!window.isDestroyed() && window.isMinimized()) {
-        window.restore();
+      if (!window.isVisible()) {
+        window.show();
       }
     });
   });
@@ -524,11 +636,54 @@ ipcMain.handle('create-fragment-window', async (_event, fragment: any) => {
     // 存储窗口引用
     fragmentWindows.set(fragment.id, fragmentWindow);
     
+    // 初始化焦点状态位图 - 新创建的窗口默认有焦点
+    windowFocusStateBitmap.set(fragment.id, true);
+    
     // 设置窗口标题
     fragmentWindow.setTitle(fragment.title);
     
     // 存储片段数据，等待渲染进程请求
     pendingFragmentData.set(fragmentWindow.id, fragment);
+    
+    // 监听片段窗口焦点事件
+    fragmentWindow.on('focus', () => {
+      // 更新片段窗口焦点状态
+      windowFocusStateBitmap.set(fragment.id, true);
+      
+      // 检查是否有任何窗口有焦点
+      let hasAnyFocus = false;
+      windowFocusStateBitmap.forEach((hasFocus, _id) => {
+        if (hasFocus) {
+          hasAnyFocus = true;
+        }
+      });
+      
+      if (!hasAnyWindowFocus && hasAnyFocus) {
+        hasAnyWindowFocus = true;
+        updateAllWindowsAlwaysOnTop(true);
+      }
+    });
+    
+    // 监听片段窗口失去焦点事件
+    fragmentWindow.on('blur', () => {
+      // 更新片段窗口焦点状态
+      windowFocusStateBitmap.set(fragment.id, false);
+      
+      if (!isMouseInAppWindows()) {
+        // 检查是否所有窗口都失去了焦点
+        let hasAnyFocus = false;
+        windowFocusStateBitmap.forEach((hasFocus, _id) => {
+          if (hasFocus) {
+            hasAnyFocus = true;
+          }
+        });
+        
+        if (hasAnyWindowFocus && !hasAnyFocus) {
+          hasAnyWindowFocus = false;
+          updateAllWindowsAlwaysOnTop(false);
+        }
+      }
+    });
     
     // 获取主窗口
     const mainWindows = BrowserWindow.getAllWindows().filter(win => !fragmentWindows.has(win.id.toString()));
@@ -552,6 +707,10 @@ ipcMain.handle('create-fragment-window', async (_event, fragment: any) => {
     
     // 显示窗口
     fragmentWindow.show();
+
+    fragmentWindow.on('show', () => {
+      windowFocusStateBitmap.set(fragment.id, true);
+    });
     
     // 窗口关闭时清理引用
     fragmentWindow.on('closed', () => {
@@ -559,6 +718,20 @@ ipcMain.handle('create-fragment-window', async (_event, fragment: any) => {
         fragmentWindows.delete(fragment.id);
       }
       pendingFragmentData.delete(fragmentWindow.id);
+      
+      // 清理焦点状态位图
+      windowFocusStateBitmap.delete(fragment.id);
+      
+      // 重新检查焦点状态
+      let hasAnyFocus = false;
+      windowFocusStateBitmap.forEach((hasFocus, _id) => {
+        if (hasFocus) {
+          hasAnyFocus = true;
+        }
+      });
+      
+      // 更新全局焦点状态
+      hasAnyWindowFocus = hasAnyFocus;
     });
     
     // 添加关闭事件处理
@@ -567,6 +740,9 @@ ipcMain.handle('create-fragment-window', async (_event, fragment: any) => {
         fragmentWindows.delete(fragment.id);
       }
       pendingFragmentData.delete(fragmentWindow.id);
+      
+      // 清理焦点状态位图
+      windowFocusStateBitmap.delete(fragment.id);
     });
     
     return { success: true, message: '片段窗口已创建' };
@@ -757,4 +933,9 @@ ipcMain.on('send-to-main-window', (_event, channel, ...args) => {
   } catch (error) {
     console.error('转发消息到主窗口失败:', error);
   }
+});
+
+// 检查鼠标是否在应用程序窗口区域内
+ipcMain.handle('is-mouse-in-app-windows', () => {
+  return isMouseInAppWindows();
 });

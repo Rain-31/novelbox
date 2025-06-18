@@ -55,7 +55,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onFragmentMessage: (callback: (message: string) => void) => ipcRenderer.on('fragment-message', (_event, message) => callback(message)),
   
   // 新增：监听内容更新消息
-  onContentUpdate: (callback: (fragment: any) => void) => ipcRenderer.on('content-update', (_event, fragment) => callback(fragment))
+  onContentUpdate: (callback: (fragment: any) => void) => ipcRenderer.on('content-update', (_event, fragment) => callback(fragment)),
 });
 
 // 监听来自主进程的菜单事件
