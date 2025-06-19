@@ -621,16 +621,19 @@ ipcMain.handle('create-fragment-window', async (_event, fragment: any) => {
       frame: false, // 无边框窗口
       modal: false,
       show: false,
-      backgroundColor: '#ffffff',
+      backgroundColor: '#00000000', // 透明背景
       // 设置关闭时的行为
       closable: true,
       alwaysOnTop: true, // 窗口始终保持在最前面
+      transparent: true, // 添加透明支持
       webPreferences: {
         preload: path.join(__dirname, process.env.VITE_DEV_SERVER_URL ? '../dist/electron/preload.js' : './preload.js'),
         nodeIntegration: false,
         contextIsolation: true,
         webSecurity: true
       },
+      // 移除vibrancy和roundedCorners，它们在Windows下兼容性不好
+      resizable: false, // 禁止调整大小以保持圆角外观
     });
     
     // 存储窗口引用
@@ -933,9 +936,4 @@ ipcMain.on('send-to-main-window', (_event, channel, ...args) => {
   } catch (error) {
     console.error('转发消息到主窗口失败:', error);
   }
-});
-
-// 检查鼠标是否在应用程序窗口区域内
-ipcMain.handle('is-mouse-in-app-windows', () => {
-  return isMouseInAppWindows();
 });

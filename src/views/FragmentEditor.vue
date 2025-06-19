@@ -248,23 +248,45 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 整体容器，设置为透明 */
 .fragment-editor-page {
   height: 100vh;
   width: 100vw;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background-color: #f5f7fa;
+  background-color: transparent; /* 完全透明 */
 }
 
+/* 通用的样式：为整体添加阴影 */
+.fragment-editor-page::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 8px;
+  pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: -1;
+}
+
+/* 实际内容容器，这个才是真正的圆角矩形 */
 .window-drag-area {
-  height: 28px; /* 增加高度 */
+  height: 28px;
   -webkit-app-region: drag;
   background-color: #f5f7fa;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 8px;
+  border-top-left-radius: 8px; /* 顶部左侧圆角 */
+  border-top-right-radius: 8px; /* 顶部右侧圆角 */
+  border-top: 1px solid rgba(230, 230, 230, 0.8);
+  border-left: 1px solid rgba(230, 230, 230, 0.8);
+  border-right: 1px solid rgba(230, 230, 230, 0.8);
+  box-shadow: none; /* 移除重复的阴影 */
 }
 
 .window-title {
@@ -335,9 +357,13 @@ onUnmounted(() => {
 .editor-content {
   flex: 1;
   display: flex;
-  padding: 0 1px;
+  padding: 0 8px;
   width: 100%;
   box-sizing: border-box;
+  background-color: #f5f7fa; /* 中间内容区域背景色 */
+  border-left: 1px solid rgba(230, 230, 230, 0.8);
+  border-right: 1px solid rgba(230, 230, 230, 0.8);
+  box-shadow: none; /* 移除重复的阴影 */
 }
 
 /* 强制内容区填满窗口 */
@@ -365,6 +391,7 @@ onUnmounted(() => {
   resize: none;
   flex: 1;
   min-height: unset;
+  border-radius: 4px; /* 添加内部文本区域圆角 */
 }
 
 /* 去掉element-plus的默认样式 */
@@ -387,6 +414,18 @@ onUnmounted(() => {
   justify-content: center;
   gap: 10px;
   padding: 5px 0;
-  background-color: #f5f7fa;
+  background-color: #f5f7fa; /* 底部区域背景色 */
+  border-bottom-left-radius: 8px; /* 底部左侧圆角 */
+  border-bottom-right-radius: 8px; /* 底部右侧圆角 */
+  border-top: 1px solid rgba(230, 230, 230, 0.5);
+  border-bottom: 1px solid rgba(230, 230, 230, 0.8);
+  border-left: 1px solid rgba(230, 230, 230, 0.8);
+  border-right: 1px solid rgba(230, 230, 230, 0.8);
+  box-shadow: none; /* 移除重复的阴影 */
+}
+
+/* 移除通用的阴影样式，改用伪元素实现 */
+.window-drag-area, .editor-content, .editor-footer {
+  box-shadow: none;
 }
 </style> 
