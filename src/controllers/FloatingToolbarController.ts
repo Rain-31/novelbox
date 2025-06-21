@@ -531,13 +531,15 @@ export default class FloatingToolbarController {
       const aiConfig = await AIConfigService.getCurrentProviderConfig();
       const aiService = new AIService(aiConfig);
 
+
+      const rewriteContent = this.rewriteContent.value;
       const selectedText = quill.getText(tempIndex, tempLength);
       const prompt = await replaceRewritePromptVariables(
         currentBook,
         currentChapter,
         quill.getText(),
         selectedText,
-        this.rewriteContent.value
+        rewriteContent
       );
 
       try {
@@ -559,7 +561,7 @@ export default class FloatingToolbarController {
           selectedText,
           bookId: currentBook.id,
           chapterId: currentChapter?.id,
-          rewritePrompt: this.rewriteContent.value
+          rewritePrompt: rewriteContent
         });
         
         // 定义回调函数
