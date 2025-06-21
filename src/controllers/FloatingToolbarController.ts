@@ -3,8 +3,9 @@ import { Ref, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import AIService from '../services/aiService';
 import { AIConfigService } from '../services/aiConfigService';
-import { type Book, type Chapter } from '../services/bookConfigService';
+import { type Book } from '../services/bookConfigService';
 import { replaceExpandPromptVariables, replaceRewritePromptVariables, replaceAbbreviatePromptVariables } from '../services/promptVariableService';
+
 
 // 这个接口必须保持与FragmentPane中类似的定义，确保兼容
 interface StreamingFragment {
@@ -13,6 +14,7 @@ interface StreamingFragment {
   content: string;
   createdAt: string;
   updatedAt: string;
+  isGenerating?: boolean;
 }
 
 interface FloatingToolbarOptions {
@@ -26,13 +28,21 @@ export default class FloatingToolbarController {
   private selectedTextRange: Ref<any> = ref(null);
   private showRewriteInput: Ref<boolean> = ref(false);
   private rewriteContent: Ref<string> = ref('');
-  private saveContentCallback: (chapterId: string, content: string) => void;
   private showFragmentCallback: (content: string, title: string) => void;
-  // 当前流式生成的片段窗口信息
-  private currentStreamingFragment: StreamingFragment | null = null;
+  // 使用Map存储多个流式生成的片段窗口信息，键为片段ID
+  private streamingFragments: Map<string, StreamingFragment> = new Map();
+  // 使用Map存储多个AI生成任务，键为片段ID
+  private generationTasks: Map<string, { abort: () => void }> = new Map();
+  // 使用Map存储每个片段的最后一次生成参数，键为片段ID
+  private lastGenerationParams: Map<string, {
+    type: 'expand' | 'condense' | 'rewrite';
+    selectedText: string;
+    chapterId?: string;
+    bookId?: string;  
+    rewritePrompt?: string;
+  }> = new Map();
 
   constructor(options: FloatingToolbarOptions) {
-    this.saveContentCallback = options.onContentSave;
     this.showFragmentCallback = options.onShowFragment || ((content: string, title: string) => {});
   }
 
@@ -164,25 +174,179 @@ export default class FloatingToolbarController {
     }, 0);
   }
 
+  // 停止指定片段ID的生成任务，如果未指定则尝试停止所有任务
+  async stopGeneration(fragmentId?: string): Promise<void> {
+    
+    // 如果指定了片段ID，只停止该片段的生成任务
+    if (fragmentId) {
+      const task = this.generationTasks.get(fragmentId);
+      if (task) {
+        try {
+          task.abort();
+          this.generationTasks.delete(fragmentId);
+          
+          // 更新片段状态
+          const fragment = this.streamingFragments.get(fragmentId);
+          if (fragment) {
+            fragment.isGenerating = false;
+            const title = fragment.title.replace('（生成中...）', '（已停止）');
+            
+            // 更新片段窗口
+            if (window.electronAPI) {
+              try {
+                fragment.title = title;
+                await window.electronAPI.updateFragmentContent(fragment);
+              } catch (error) {
+                console.error('更新片段窗口失败:', error);
+              }
+            } else {
+              this.showFragmentCallback(fragment.content, title);
+            }
+          } else {
+            console.log(`没有找到ID为 ${fragmentId} 的片段`);
+          }
+          
+          ElMessage.info('已停止AI生成');
+          return;
+        } catch (error) {
+          console.error('停止生成任务时出错:', error);
+        }
+      } else {
+        console.log(`没有找到ID为 ${fragmentId} 的活跃生成任务`);
+        ElMessage.info('没有正在进行的AI生成任务');
+      }
+    } else {
+      // 如果没有指定片段ID，尝试停止所有生成任务
+      if (this.generationTasks.size > 0) {
+        const promises: Promise<void>[] = [];
+        
+        // 为每个活跃任务创建停止Promise
+        this.generationTasks.forEach((task, id) => {
+          promises.push(this.stopGeneration(id));
+        });
+        
+        // 等待所有任务停止
+        await Promise.all(promises);
+        ElMessage.info(`已停止所有AI生成任务`);
+      } else {
+        console.log('没有活跃的生成任务可停止');
+        ElMessage.info('没有正在进行的AI生成任务');
+      }
+    }
+  }
+
+  // 重新生成指定片段ID的内容
+  async regenerateContent(quill: any, currentChapter: any, currentBook: Book | null, fragmentId?: string): Promise<void> {
+    // 如果指定了片段ID，只重新生成该片段
+    if (fragmentId) {
+      const params = this.lastGenerationParams.get(fragmentId);
+      if (!params) {
+        ElMessage.error(`无法重新生成片段 ${fragmentId}，没有找到上次生成的参数`);
+        return;
+      }
+
+      // 先停止当前任务（如果有）
+      const task = this.generationTasks.get(fragmentId);
+      if (task) {
+        await this.stopGeneration(fragmentId);
+      }
+
+      // 获取片段引用
+      const fragment = this.streamingFragments.get(fragmentId);
+      if (!fragment) {
+        ElMessage.error(`无法找到片段 ${fragmentId}`);
+        return;
+      }
+      
+      // 更新片段状态为生成中
+      fragment.isGenerating = true;
+      const currentTitle = fragment.title.replace('（已停止）', '');
+      fragment.title = `${currentTitle}（生成中...）`;
+      
+      // 更新片段窗口状态
+      if (window.electronAPI) {
+        try {
+          await window.electronAPI.updateFragmentContent(fragment);
+        } catch (error) {
+          console.error('更新片段窗口失败:', error);
+        }
+      }
+
+      // 清空内容准备重新生成
+      fragment.content = '';
+      
+      // 根据上次的生成类型重新生成
+      switch (params.type) {
+        case 'expand':
+          await this.expandSelectedText(quill, currentChapter, currentBook, fragmentId);
+          break;
+        case 'condense':
+          await this.condenseSelectedText(quill, currentChapter, currentBook, fragmentId);
+          break;
+        case 'rewrite':
+          if (params.rewritePrompt) {
+            this.rewriteContent.value = params.rewritePrompt;
+            await this.rewriteSelectedText(quill, currentChapter, currentBook, fragmentId);
+          } else {
+            ElMessage.error('无法重新生成，缺少改写提示');
+          }
+          break;
+      }
+    } else {
+      ElMessage.error('重新生成需要指定片段ID');
+    }
+  }
+
   // 创建或更新流式片段窗口
-  private async showStreamingFragment(content: string, baseTitle: string, isFirst: boolean = false, isComplete: boolean = false): Promise<void> {
+  private async showStreamingFragment(content: string, baseTitle: string, isFirst: boolean = false, isComplete: boolean = false, fragmentId?: string): Promise<string> {
     const title = isComplete ? baseTitle : `${baseTitle}（生成中...）`;
     
-    // 如果是首次创建，初始化片段信息
-    if (isFirst || !this.currentStreamingFragment) {
-      this.currentStreamingFragment = {
-        id: `streaming-${Date.now()}`,
-        title: title,
-        content: content,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+    // 如果提供了fragmentId且已存在，则更新该片段
+    if (fragmentId && this.streamingFragments.has(fragmentId)) {
+      const fragment = this.streamingFragments.get(fragmentId)!;
+      fragment.content = content;
+      fragment.title = title;
+      fragment.updatedAt = new Date().toISOString();
+      fragment.isGenerating = !isComplete;
 
       // 检查是否在Electron环境中
       if (window.electronAPI) {
         try {
-          // 直接使用electronAPI创建窗口，绕过标准回调
-          await window.electronAPI.createFragmentWindow(this.currentStreamingFragment);
+          // 使用updateFragmentContent更新窗口内容
+          await window.electronAPI.updateFragmentContent(fragment);
+          
+        } catch (error) {
+          console.error('更新流式片段窗口失败:', error);
+          // 如果更新失败，使用回退方案
+          this.showFragmentCallback(content, title);
+        }
+      } else {
+        // 不在Electron环境中，使用标准回调
+        this.showFragmentCallback(content, title);
+      }
+      
+      return fragment.id;
+    } 
+    // 否则创建新片段
+    else {
+      const newId = fragmentId || `streaming-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const fragment: StreamingFragment = {
+        id: newId,
+        title: title,
+        content: content,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isGenerating: !isComplete
+      };
+      
+      // 保存到片段Map中
+      this.streamingFragments.set(fragment.id, fragment);
+
+      // 检查是否在Electron环境中
+      if (window.electronAPI) {
+        try {
+          // 直接使用electronAPI创建窗口
+          await window.electronAPI.createFragmentWindow(fragment);
         } catch (error) {
           console.error('创建流式片段窗口失败:', error);
           ElMessage.error('创建片段窗口失败');
@@ -193,36 +357,13 @@ export default class FloatingToolbarController {
         // 不在Electron环境中，使用标准回调
         this.showFragmentCallback(content, title);
       }
-    } else {
-      // 更新已有片段内容
-      this.currentStreamingFragment.content = content;
-      this.currentStreamingFragment.title = title;
-      this.currentStreamingFragment.updatedAt = new Date().toISOString();
-
-      // 检查是否在Electron环境中
-      if (window.electronAPI) {
-        try {
-          // 使用updateFragmentContent更新窗口内容
-          await window.electronAPI.updateFragmentContent(this.currentStreamingFragment);
-        } catch (error) {
-          console.error('更新流式片段窗口失败:', error);
-          // 如果更新失败，使用回退方案
-          this.showFragmentCallback(content, title);
-        }
-      } else {
-        // 不在Electron环境中，使用标准回调
-        this.showFragmentCallback(content, title);
-      }
-    }
-
-    // 如果生成完成，重置片段信息
-    if (isComplete) {
-      this.currentStreamingFragment = null;
+      
+      return fragment.id;
     }
   }
 
   // 扩写选中文本
-  async expandSelectedText(quill: any, currentChapter: any, currentBook: Book | null): Promise<void> {
+  async expandSelectedText(quill: any, currentChapter: any, currentBook: Book | null, existingFragmentId?: string): Promise<void> {
     if (!this.selectedTextRange.value) return;
     const selectedText = quill.getText(this.selectedTextRange.value.index, this.selectedTextRange.value.length);
 
@@ -259,12 +400,20 @@ export default class FloatingToolbarController {
     );
 
     try {
-      // 显示初始的空片段窗口
-      await this.showStreamingFragment('', '扩写内容', true, false);
+      // 显示初始的空片段窗口或更新现有窗口
+      const fragmentId = await this.showStreamingFragment('', '扩写内容', true, false, existingFragmentId);
       let content = '';
       
-      // 使用流式请求
-      const response = await aiService.generateText(prompt, (text, error, complete) => {
+      // 保存生成参数用于重新生成
+      this.lastGenerationParams.set(fragmentId, {
+        type: 'expand',
+        selectedText,
+        bookId: currentBook.id,
+        chapterId: currentChapter?.id
+      });
+      
+      // 定义回调函数
+      const streamCallback = (text: string, error?: string, complete?: boolean) => {
         if (error) {
           ElMessage.error(`AI扩写失败：${error}`);
           return;
@@ -274,11 +423,24 @@ export default class FloatingToolbarController {
         content += text;
         
         // 更新片段窗口内容
-        this.showStreamingFragment(content, '扩写内容', false, complete);
-      });
+        this.showStreamingFragment(content, '扩写内容', false, complete || false, fragmentId);
+      };
+      
+      // 使用流式请求 - AIService内部会创建自己的AbortController
+      const response = await aiService.generateText(prompt, streamCallback);
+      
+      // 保存生成任务的cancel函数，以便后续可以调用停止生成
+      if ('cancel' in response) {
+        this.generationTasks.set(fragmentId, {
+          abort: () => {
+            response.cancel();
+          }
+        });
+      }
       
       if ('error' in response && response.error) {
         ElMessage.error(`AI扩写失败：${response.error}`);
+        console.error('AI扩写失败:', response.error);
       }
     } catch (error) {
       console.error('AI扩写失败:', error);
@@ -287,7 +449,7 @@ export default class FloatingToolbarController {
   }
 
   // 缩写选中文本
-  async condenseSelectedText(quill: any, currentChapter: any, currentBook: Book | null): Promise<void> {
+  async condenseSelectedText(quill: any, currentChapter: any, currentBook: Book | null, existingFragmentId?: string): Promise<void> {
     if (!this.selectedTextRange.value) return;
     const selectedText = quill.getText(this.selectedTextRange.value.index, this.selectedTextRange.value.length);
 
@@ -307,12 +469,20 @@ export default class FloatingToolbarController {
         selectedText
       );
 
-      // 显示初始的空片段窗口
-      await this.showStreamingFragment('', '缩写内容', true, false);
+      // 显示初始的空片段窗口或更新现有窗口
+      const fragmentId = await this.showStreamingFragment('', '缩写内容', true, false, existingFragmentId);
       let content = '';
       
-      // 使用流式请求
-      const response = await aiService.generateText(prompt, (text, error, complete) => {
+      // 保存生成参数用于重新生成
+      this.lastGenerationParams.set(fragmentId, {
+        type: 'condense',
+        selectedText,
+        bookId: currentBook.id,
+        chapterId: currentChapter?.id
+      });
+      
+      // 定义回调函数
+      const streamCallback = (text: string, error?: string, complete?: boolean) => {
         if (error) {
           ElMessage.error(`AI缩写失败：${error}`);
           return;
@@ -322,11 +492,24 @@ export default class FloatingToolbarController {
         content += text;
         
         // 更新片段窗口内容
-        this.showStreamingFragment(content, '缩写内容', false, complete);
-      });
+        this.showStreamingFragment(content, '缩写内容', false, complete || false, fragmentId);
+      };
+      
+      // 使用流式请求 - AIService内部会创建自己的AbortController
+      const response = await aiService.generateText(prompt, streamCallback);
+      
+      // 保存生成任务的cancel函数，以便后续可以调用停止生成
+      if ('cancel' in response) {
+        this.generationTasks.set(fragmentId, {
+          abort: () => {
+            response.cancel();
+          }
+        });
+      }
       
       if ('error' in response && response.error) {
         ElMessage.error(`AI缩写失败：${response.error}`);
+        console.error('AI缩写失败:', response.error);
       }
     } catch (error) {
       console.error('AI缩写失败:', error);
@@ -335,7 +518,7 @@ export default class FloatingToolbarController {
   }
 
   // 改写选中文本
-  async rewriteSelectedText(quill: any, currentChapter: any, currentBook: Book | null): Promise<void> {
+  async rewriteSelectedText(quill: any, currentChapter: any, currentBook: Book | null, existingFragmentId?: string): Promise<void> {
     if (!this.selectedTextRange.value) return;
     const { index: tempIndex, length: tempLength } = this.selectedTextRange.value;
 
@@ -366,12 +549,21 @@ export default class FloatingToolbarController {
         
         quill.setSelection(tempIndex, tempLength, 'user');
 
-        // 显示初始的空片段窗口
-        await this.showStreamingFragment('', '改写内容', true, false);
+        // 显示初始的空片段窗口或更新现有窗口
+        const fragmentId = await this.showStreamingFragment('', '改写内容', true, false, existingFragmentId);
         let content = '';
         
-        // 使用流式请求
-        const response = await aiService.generateText(prompt, (text, error, complete) => {
+        // 保存生成参数用于重新生成
+        this.lastGenerationParams.set(fragmentId, {
+          type: 'rewrite',
+          selectedText,
+          bookId: currentBook.id,
+          chapterId: currentChapter?.id,
+          rewritePrompt: this.rewriteContent.value
+        });
+        
+        // 定义回调函数
+        const streamCallback = (text: string, error?: string, complete?: boolean) => {
           if (error) {
             ElMessage.error(`AI改写失败：${error}`);
             return;
@@ -381,11 +573,24 @@ export default class FloatingToolbarController {
           content += text;
           
           // 更新片段窗口内容
-          this.showStreamingFragment(content, '改写内容', false, complete);
-        });
+          this.showStreamingFragment(content, '改写内容', false, complete || false, fragmentId);
+        };
+        
+        // 使用流式请求 - AIService内部会创建自己的AbortController
+        const response = await aiService.generateText(prompt, streamCallback);
+        
+        // 保存生成任务的cancel函数，以便后续可以调用停止生成
+        if ('cancel' in response) {
+          this.generationTasks.set(fragmentId, {
+            abort: () => {
+              response.cancel();
+            }
+          });
+        }
         
         if ('error' in response && response.error) {
           ElMessage.error(`AI改写失败：${response.error}`);
+          console.error('AI改写失败:', response.error);
         }
       } catch (error) {
         console.error('AI改写失败:', error);

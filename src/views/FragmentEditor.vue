@@ -38,6 +38,15 @@
       />
     </div>
     <div class="editor-footer">
+      <!-- 生成控制按钮 -->
+      <template v-if="isGenerating">
+        <el-button type="danger" size="small" @click="stopGeneration">停止生成</el-button>
+      </template>
+      <template v-else>
+        <template v-if="wasGenerating">
+          <el-button type="primary" size="small" @click="regenerateContent">重新生成</el-button>
+        </template>
+      </template>
       <el-button type="success" size="small" @click="insertToEditor">插入原文</el-button>
       <el-button type="warning" size="small" @click="replaceInEditor">替换原文</el-button>
       <el-button type="primary" size="small" @click="saveFragment">保存</el-button>
@@ -55,6 +64,7 @@ interface Fragment {
   content: string
   createdAt: Date
   updatedAt: Date
+  isGenerating?: boolean
 }
 
 // 片段数据
@@ -62,7 +72,8 @@ const fragment = ref<Fragment>({
   id: '',
   content: '',
   createdAt: new Date(),
-  updatedAt: new Date()
+  updatedAt: new Date(),
+  isGenerating: false
 })
 
 // 片段标题
@@ -75,6 +86,10 @@ const editingTitle = ref('')
 const titleInputRef = ref<any>(null)
 // 标题文本引用
 const titleRef = ref<any>(null)
+// 片段是否正在生成
+const isGenerating = ref(false)
+// 片段是否曾经在生成（用于显示重新生成按钮）
+const wasGenerating = ref(false)
 
 // 保存片段
 const saveFragment = async () => {
@@ -156,6 +171,44 @@ const cancelTitleEdit = () => {
   isEditingTitle.value = false
 }
 
+// 停止AI生成
+const stopGeneration = () => {
+  try {
+    const message = {
+      type: 'stop-generation',
+      fragmentId: fragment.value.id
+    }
+    // 确保消息内容是字符串
+    const messageStr = JSON.stringify(message);
+    window.electronAPI.sendToMainWindow(messageStr);
+    ElMessage.info('已发送停止指令');
+  } catch (error) {
+    console.error('发送停止指令失败:', error);
+    ElMessage.error('发送失败');
+  }
+}
+
+// 重新生成内容
+const regenerateContent = () => {
+  try {
+    const message = {
+      type: 'regenerate-content',
+      fragmentId: fragment.value.id
+    }
+    // 确保消息内容是字符串
+    const messageStr = JSON.stringify(message);
+    window.electronAPI.sendToMainWindow(messageStr);
+    ElMessage.info('正在重新生成...');
+    
+    // 更新UI状态，显示生成中
+    isGenerating.value = true;
+    fragmentTitle.value = fragmentTitle.value.replace('（已停止）', '') + '（生成中...）';
+  } catch (error) {
+    console.error('发送重新生成指令失败:', error);
+    ElMessage.error('发送失败');
+  }
+}
+
 // 插入到编辑器
 const insertToEditor = () => {
   try {
@@ -195,12 +248,24 @@ onMounted(async () => {
       id: data.id || '', // 确保ID有值
       content: data.content || '',
       createdAt: new Date(data.createdAt || Date.now()),
-      updatedAt: new Date(data.updatedAt || Date.now())
+      updatedAt: new Date(data.updatedAt || Date.now()),
+      isGenerating: data.isGenerating || false
     }
     
     // 设置标题
     fragmentTitle.value = data.title || '新片段';
     
+    // 设置生成状态
+    isGenerating.value = data.isGenerating || false;
+    
+    if (fragmentTitle.value.includes('（生成中...）')) {
+      isGenerating.value = true;
+    }
+    
+    if (fragmentTitle.value.includes('（已停止）') || 
+        (!fragmentTitle.value.includes('（生成中...）') && fragment.value.content.trim() !== '')) {
+      wasGenerating.value = true;
+    }
   };
   
   // 注册监听器
@@ -217,6 +282,28 @@ onMounted(async () => {
     // 更新标题
     if (data.title) {
       fragmentTitle.value = data.title;
+    }
+    
+    // 检查之前的生成状态
+    const wasGeneratingBefore = isGenerating.value;
+    
+    // 更新生成状态
+    if (data.isGenerating !== undefined) {
+      isGenerating.value = data.isGenerating;
+    } else {
+      // 根据标题判断生成状态
+      if (fragmentTitle.value.includes('（生成中...）')) {
+        isGenerating.value = true;
+      } else {
+        isGenerating.value = false;
+      }
+    }
+
+    if ((wasGeneratingBefore && !isGenerating.value && fragment.value.content.trim() !== '') || 
+        fragmentTitle.value.includes('（已停止）') || 
+        (!fragmentTitle.value.includes('（生成中...）') && fragment.value.content.trim() !== '') ||
+        wasGenerating.value) {
+      wasGenerating.value = true;
     }
     
     // 更新时间戳
@@ -259,6 +346,13 @@ onUnmounted(() => {
 }
 
 /* 通用的样式：为整体添加阴影 */
+.fragment-editor-page {
+  position: relative;
+  border-radius: 8px; /* 整体圆角 */
+  overflow: hidden;
+}
+
+/* 添加整体阴影 */
 .fragment-editor-page::after {
   content: '';
   position: absolute;
@@ -266,10 +360,10 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  border-radius: 8px;
   pointer-events: none;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   z-index: -1;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
 }
 
 /* 实际内容容器，这个才是真正的圆角矩形 */

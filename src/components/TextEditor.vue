@@ -169,6 +169,29 @@ const handleFragmentMessage = (message: string) => {
         editor.updateContents(delta, 'user')
         editor.setSelection(index, data.content.length)
       }
+    } else if (data.type === 'stop-generation') {
+      // 停止AI生成，传递片段ID
+      console.log('接收到停止生成命令', data);
+      if (data.fragmentId) {
+        floatingToolbarController.stopGeneration(data.fragmentId);
+      } else {
+        console.warn('停止生成命令缺少fragmentId');
+        floatingToolbarController.stopGeneration();
+      }
+    } else if (data.type === 'regenerate-content') {
+      // 重新生成内容，传递片段ID
+      console.log('接收到重新生成命令', data);
+      if (data.fragmentId) {
+        floatingToolbarController.regenerateContent(
+          editor, 
+          props.currentChapter, 
+          props.currentBook, 
+          data.fragmentId
+        );
+      } else {
+        console.warn('重新生成命令缺少fragmentId');
+        ElMessage.error('重新生成需要指定片段ID');
+      }
     }
   } catch (error) {
     console.error('处理片段消息失败:', error)
