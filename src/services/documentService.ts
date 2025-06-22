@@ -27,24 +27,67 @@ export class DocumentService {
 
         // 添加章节内容
         if (chapter.content) {
-            // 将HTML内容转换为纯文本
+            // 将HTML内容转换为纯文本，保留缩进和空行
             const plainText = htmlToText(chapter.content, {
                 wordwrap: false,
-                preserveNewlines: true
+                preserveNewlines: true,
+                selectors: [
+                    { selector: 'p', options: { leadingLineBreaks: 2, trailingLineBreaks: 2 } },
+                    { selector: 'br', format: 'lineBreak' }
+                ]
             });
-            const contentParagraphs = plainText.split('\n').filter(p => p.trim());
+            
+            // 分割文本为段落，保留空行
+            const contentParagraphs = plainText.split('\n');
+            let emptyLineCount = 0;
+            
             contentParagraphs.forEach(p => {
-                paragraphs.push(
-                    new Paragraph({
-                        children: [
-                            new TextRun({
-                                text: p.trim(),
-                                size: 24
+                // 检查是否为空行
+                if (p.trim() === '') {
+                    emptyLineCount++;
+                    // 只添加一个空行段落，避免多个连续空行
+                    if (emptyLineCount === 1) {
+                        paragraphs.push(
+                            new Paragraph({
+                                children: [new TextRun({ text: '', size: 24 })],
+                                spacing: { before: 200, after: 200 }
                             })
-                        ],
-                        spacing: { before: 200, after: 200 }
-                    })
-                );
+                        );
+                    }
+                } else {
+                    emptyLineCount = 0;
+                    
+                    // 检查是否有全角空格缩进（编辑器使用的是全角空格）
+                    const fullWidthIndent = p.match(/^(　+)/);
+                    // 检查是否有普通空格缩进
+                    const normalIndent = p.match(/^( +)/);
+                    
+                    let indentLevel = 0;
+                    let textContent = p;
+                    
+                    if (fullWidthIndent) {
+                        // 全角空格缩进，每个全角空格算一级缩进
+                        indentLevel = fullWidthIndent[0].length;
+                        textContent = p.substring(fullWidthIndent[0].length);
+                    } else if (normalIndent) {
+                        // 普通空格缩进，每两个空格算一级缩进
+                        indentLevel = Math.floor(normalIndent[0].length / 2);
+                        textContent = p.substring(normalIndent[0].length);
+                    }
+                    
+                    paragraphs.push(
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: textContent,
+                                    size: 24
+                                })
+                            ],
+                            spacing: { before: 200, after: 200 },
+                            indent: indentLevel > 0 ? { firstLine: indentLevel * 240 } : undefined
+                        })
+                    );
+                }
             });
         }
 
