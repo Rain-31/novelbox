@@ -15,6 +15,7 @@ interface StreamingFragment {
   createdAt: string;
   updatedAt: string;
   isGenerating?: boolean;
+  wasStopped?: boolean;
 }
 
 interface FloatingToolbarOptions {
@@ -189,18 +190,28 @@ export default class FloatingToolbarController {
           const fragment = this.streamingFragments.get(fragmentId);
           if (fragment) {
             fragment.isGenerating = false;
-            const title = fragment.title.replace('（生成中...）', '（已停止）');
+            fragment.wasStopped = true;
             
             // 更新片段窗口
             if (window.electronAPI) {
               try {
-                fragment.title = title;
-                await window.electronAPI.updateFragmentContent(fragment);
+                // 创建一个新对象发送，确保所有属性都被复制
+                const updateData = {
+                  id: fragment.id,
+                  title: fragment.title,
+                  content: fragment.content,
+                  createdAt: fragment.createdAt,
+                  updatedAt: fragment.updatedAt,
+                  isGenerating: fragment.isGenerating,
+                  wasStopped: fragment.wasStopped
+                };
+                
+                await window.electronAPI.updateFragmentContent(updateData);
               } catch (error) {
                 console.error('更新片段窗口失败:', error);
               }
             } else {
-              this.showFragmentCallback(fragment.content, title);
+              this.showFragmentCallback(fragment.content, fragment.title);
             }
           } else {
             console.log(`没有找到ID为 ${fragmentId} 的片段`);
@@ -212,26 +223,32 @@ export default class FloatingToolbarController {
           console.error('停止生成任务时出错:', error);
         }
       } else {
-        console.log(`没有找到ID为 ${fragmentId} 的活跃生成任务`);
-        
         // 检查片段是否存在，如果存在但没有活跃任务，可能是已经完成的任务
         const fragment = this.streamingFragments.get(fragmentId);
         if (fragment && fragment.isGenerating) {
           // 更新片段状态为非生成状态
           fragment.isGenerating = false;
-          if (fragment.title.includes('（生成中...）')) {
-            fragment.title = fragment.title.replace('（生成中...）', '');
-            
-            // 更新片段窗口
-            if (window.electronAPI) {
-              try {
-                await window.electronAPI.updateFragmentContent(fragment);
-              } catch (error) {
-                console.error('更新片段窗口失败:', error);
-              }
-            } else {
-              this.showFragmentCallback(fragment.content, fragment.title);
+          
+          // 更新片段窗口
+          if (window.electronAPI) {
+            try {
+              // 创建一个新对象发送，确保所有属性都被复制
+              const updateData = {
+                id: fragment.id,
+                title: fragment.title,
+                content: fragment.content,
+                createdAt: fragment.createdAt,
+                updatedAt: fragment.updatedAt,
+                isGenerating: fragment.isGenerating,
+                wasStopped: fragment.wasStopped
+              };
+              
+              await window.electronAPI.updateFragmentContent(updateData);
+            } catch (error) {
+              console.error('更新片段窗口失败:', error);
             }
+          } else {
+            this.showFragmentCallback(fragment.content, fragment.title);
           }
         }
         
@@ -240,6 +257,8 @@ export default class FloatingToolbarController {
     } else {
       // 如果没有指定片段ID，尝试停止所有生成任务
       if (this.generationTasks.size > 0) {
+        console.log(`尝试停止所有生成任务: ${this.generationTasks.size}个`);
+        
         const promises: Promise<void>[] = [];
         
         // 为每个活跃任务创建停止Promise
@@ -286,13 +305,23 @@ export default class FloatingToolbarController {
       
       // 更新片段状态为生成中
       fragment.isGenerating = true;
-      const currentTitle = fragment.title.replace('（已停止）', '');
-      fragment.title = `${currentTitle}（生成中...）`;
+      fragment.wasStopped = false;
       
       // 更新片段窗口状态
       if (window.electronAPI) {
         try {
-          await window.electronAPI.updateFragmentContent(fragment);
+          // 创建一个新对象发送，确保所有属性都被复制
+          const updateData = {
+            id: fragment.id,
+            title: fragment.title,
+            content: fragment.content,
+            createdAt: fragment.createdAt,
+            updatedAt: fragment.updatedAt,
+            isGenerating: fragment.isGenerating,
+            wasStopped: fragment.wasStopped
+          };
+          
+          await window.electronAPI.updateFragmentContent(updateData);
         } catch (error) {
           console.error('更新片段窗口失败:', error);
         }
@@ -301,22 +330,99 @@ export default class FloatingToolbarController {
       // 清空内容准备重新生成
       fragment.content = '';
       
+      // 获取AI配置
+      const aiConfig = await AIConfigService.getCurrentProviderConfig();
+      const aiService = new AIService(aiConfig);
+      
       // 根据上次的生成类型重新生成
-      switch (params.type) {
-        case 'expand':
-          await this.expandSelectedText(quill, currentChapter, currentBook, fragmentId);
-          break;
-        case 'condense':
-          await this.condenseSelectedText(quill, currentChapter, currentBook, fragmentId);
-          break;
-        case 'rewrite':
-          if (params.rewritePrompt) {
-            this.rewriteContent.value = params.rewritePrompt;
-            await this.rewriteSelectedText(quill, currentChapter, currentBook, fragmentId);
-          } else {
-            ElMessage.error('无法重新生成，缺少改写提示');
+      try {
+        let prompt = '';
+        
+        // 根据类型准备提示词
+        switch (params.type) {
+          case 'expand':
+            prompt = await replaceExpandPromptVariables(
+              currentBook,
+              currentChapter,
+              quill.getText(),
+              params.selectedText
+            );
+            break;
+          case 'condense':
+            prompt = await replaceAbbreviatePromptVariables(
+              currentBook,
+              currentChapter,
+              quill.getText(),
+              params.selectedText
+            );
+            break;
+          case 'rewrite':
+            if (params.rewritePrompt) {
+              prompt = await replaceRewritePromptVariables(
+                currentBook,
+                currentChapter,
+                quill.getText(),
+                params.selectedText,
+                params.rewritePrompt
+              );
+            } else {
+              ElMessage.error('无法重新生成，缺少改写提示');
+              return;
+            }
+            break;
+        }
+        
+        // 定义回调函数
+        let content = '';
+        const streamCallback = (text: string, error?: string, complete?: boolean) => {
+          if (error) {
+            ElMessage.error(`AI生成失败：${error}`);
+            return;
           }
-          break;
+          
+          // 累积内容
+          content += text;
+          
+          // 更新片段窗口内容
+          const title = params.type === 'expand' ? '扩写内容' : 
+                       params.type === 'condense' ? '缩写内容' : '改写内容';
+          
+          this.showStreamingFragment(content, title, false, complete || false, fragmentId);
+          
+          // 如果生成完成，清理任务
+          if (complete) {
+            this.cleanupGenerationTask(fragmentId);
+          }
+        };
+        
+        // 开始生成
+        const response = await aiService.generateText(prompt, streamCallback);
+        
+        // 保存任务引用，以便可以取消
+        if ('cancel' in response) {
+          this.generationTasks.set(fragmentId, { abort: response.cancel });
+        }
+        
+      } catch (error) {
+        console.error('发送AI请求失败:', error);
+        ElMessage.error('发送AI请求失败');
+        
+        // 更新状态
+        fragment.isGenerating = false;
+        fragment.wasStopped = true;
+        
+        // 更新片段窗口
+        if (window.electronAPI) {
+          try {
+            await window.electronAPI.updateFragmentContent({
+              ...fragment,
+              isGenerating: false,
+              wasStopped: true
+            });
+          } catch (err) {
+            console.error('更新片段窗口失败:', err);
+          }
+        }
       }
     } else {
       ElMessage.error('重新生成需要指定片段ID');
@@ -325,30 +431,44 @@ export default class FloatingToolbarController {
 
   // 创建或更新流式片段窗口
   private async showStreamingFragment(content: string, baseTitle: string, isFirst: boolean = false, isComplete: boolean = false, fragmentId?: string): Promise<string> {
-    const title = isComplete ? baseTitle : `${baseTitle}（生成中...）`;
-    
     // 如果提供了fragmentId且已存在，则更新该片段
     if (fragmentId && this.streamingFragments.has(fragmentId)) {
       const fragment = this.streamingFragments.get(fragmentId)!;
       fragment.content = content;
-      fragment.title = title;
+      fragment.title = baseTitle;
       fragment.updatedAt = new Date().toISOString();
-      fragment.isGenerating = !isComplete;
-
+      
+      // 明确设置生成状态
+      if (isComplete) {
+        fragment.isGenerating = false;
+        fragment.wasStopped = false;
+      } else {
+        fragment.isGenerating = true;
+      }
+      
       // 检查是否在Electron环境中
       if (window.electronAPI) {
         try {
-          // 使用updateFragmentContent更新窗口内容
-          await window.electronAPI.updateFragmentContent(fragment);
+          // 创建一个新对象发送，确保所有属性都被复制
+          const updateData = {
+            id: fragment.id,
+            title: fragment.title,
+            content: fragment.content,
+            createdAt: fragment.createdAt,
+            updatedAt: fragment.updatedAt,
+            isGenerating: fragment.isGenerating,
+            wasStopped: fragment.wasStopped
+          };
           
+          await window.electronAPI.updateFragmentContent(updateData);
         } catch (error) {
           console.error('更新流式片段窗口失败:', error);
           // 如果更新失败，使用回退方案
-          this.showFragmentCallback(content, title);
+          this.showFragmentCallback(content, baseTitle);
         }
       } else {
         // 不在Electron环境中，使用标准回调
-        this.showFragmentCallback(content, title);
+        this.showFragmentCallback(content, baseTitle);
       }
       
       return fragment.id;
@@ -356,13 +476,15 @@ export default class FloatingToolbarController {
     // 否则创建新片段
     else {
       const newId = fragmentId || `streaming-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
       const fragment: StreamingFragment = {
         id: newId,
-        title: title,
+        title: baseTitle,
         content: content,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        isGenerating: !isComplete
+        isGenerating: !isComplete,
+        wasStopped: false
       };
       
       // 保存到片段Map中
@@ -377,11 +499,11 @@ export default class FloatingToolbarController {
           console.error('创建流式片段窗口失败:', error);
           ElMessage.error('创建片段窗口失败');
           // 如果创建窗口失败，使用回退方案
-          this.showFragmentCallback(content, title);
+          this.showFragmentCallback(content, baseTitle);
         }
       } else {
         // 不在Electron环境中，使用标准回调
-        this.showFragmentCallback(content, title);
+        this.showFragmentCallback(content, baseTitle);
       }
       
       return fragment.id;
@@ -431,13 +553,15 @@ export default class FloatingToolbarController {
       let content = '';
       
       // 保存生成参数用于重新生成
-      this.lastGenerationParams.set(fragmentId, {
-        type: 'expand',
+      const params = {
+        type: 'expand' as const,
         selectedText,
         bookId: currentBook.id,
         chapterId: currentChapter?.id
-      });
+      };
       
+      this.lastGenerationParams.set(fragmentId, params);
+
       // 定义回调函数
       const streamCallback = (text: string, error?: string, complete?: boolean) => {
         if (error) {
@@ -505,13 +629,15 @@ export default class FloatingToolbarController {
       let content = '';
       
       // 保存生成参数用于重新生成
-      this.lastGenerationParams.set(fragmentId, {
-        type: 'condense',
+      const params = {
+        type: 'condense' as const,
         selectedText,
         bookId: currentBook.id,
         chapterId: currentChapter?.id
-      });
+      };
       
+      this.lastGenerationParams.set(fragmentId, params);
+
       // 定义回调函数
       const streamCallback = (text: string, error?: string, complete?: boolean) => {
         if (error) {
@@ -592,13 +718,15 @@ export default class FloatingToolbarController {
         let content = '';
         
         // 保存生成参数用于重新生成
-        this.lastGenerationParams.set(fragmentId, {
-          type: 'rewrite',
+        const params = {
+          type: 'rewrite' as const,
           selectedText,
           bookId: currentBook.id,
           chapterId: currentChapter?.id,
           rewritePrompt: rewriteContent
-        });
+        };
+        
+        this.lastGenerationParams.set(fragmentId, params);
         
         // 定义回调函数
         const streamCallback = (text: string, error?: string, complete?: boolean) => {
@@ -682,6 +810,40 @@ export default class FloatingToolbarController {
   private cleanupGenerationTask(fragmentId: string): void {
     if (this.generationTasks.has(fragmentId)) {
       this.generationTasks.delete(fragmentId);
+      
+      // 获取片段并更新状态
+      const fragment = this.streamingFragments.get(fragmentId);
+      if (fragment) {
+        // 明确设置状态
+        fragment.isGenerating = false;
+        fragment.wasStopped = false;
+        
+        // 更新片段窗口
+        if (window.electronAPI) {
+          try {
+            // 创建一个新对象发送，确保所有属性都被复制
+            const updateData = {
+              id: fragment.id,
+              title: fragment.title,
+              content: fragment.content,
+              createdAt: fragment.createdAt,
+              updatedAt: fragment.updatedAt,
+              isGenerating: fragment.isGenerating,
+              wasStopped: fragment.wasStopped
+            };
+            
+            window.electronAPI.updateFragmentContent(updateData)
+              .then(() => console.log(`窗口状态更新成功: ${fragmentId}`))
+              .catch(error => console.error('更新片段窗口状态失败:', error));
+          } catch (error) {
+            console.error('更新片段窗口状态失败:', error);
+          }
+        }
+      } else {
+        console.log(`未找到片段: ${fragmentId}`);
+      }
+    } else {
+      console.log(`未找到生成任务: ${fragmentId}`);
     }
   }
 } 

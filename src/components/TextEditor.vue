@@ -130,48 +130,37 @@ const initAIGenerateButton = () => {
   aiChapterGenerateController.initGenerateButton();
 }
 
-// 处理片段编辑器发来的消息
-const handleFragmentMessage = (message: string) => {
+// 处理来自片段窗口的消息
+const handleFragmentMessage = (messageStr: string) => {
   try {
-    const data = JSON.parse(message)
-    const editor = quillEditor.value?.getQuill()
-    if (!editor) return
-
-    // 使用updateContents方法确保操作被记录到历史中
+    
+    // 解析消息
+    const data = JSON.parse(messageStr);
+    
     if (data.type === 'insert-fragment') {
-      // 获取当前选区
-      const selection = editor.getSelection()
-      const index = selection ? selection.index : editor.getLength()
-      
-      // 创建Delta对象表示插入操作
-      const delta = new Delta().retain(index).insert(data.content)
-      
-      // 应用更改并记录到历史中
-      editor.updateContents(delta, 'user')
-      editor.setSelection(index, data.content.length)
-    } else if (data.type === 'replace-fragment') {
-      // 获取当前选区
-      const selection = editor.getSelection()
-      if (selection && selection.length > 0) {
-        // 创建Delta对象表示替换操作
-        const delta = new Delta()
-          .retain(selection.index)
-          .delete(selection.length)
-          .insert(data.content)
-        
-        // 应用更改并记录到历史中
-        editor.updateContents(delta, 'user')
-        editor.setSelection(selection.index, data.content.length)
+      // 插入内容到编辑器
+      const editor = quillEditor.value.getQuill();
+      const selection = editor.getSelection();
+      if (selection) {
+        editor.insertText(selection.index, data.content, 'user');
+        ElMessage.success('内容已插入');
       } else {
-        // 如果没有选中内容，在光标位置插入
-        const index = selection ? selection.index : editor.getLength()
-        const delta = new Delta().retain(index).insert(data.content)
-        editor.updateContents(delta, 'user')
-        editor.setSelection(index, data.content.length)
+        editor.insertText(editor.getLength() - 1, data.content, 'user');
+        ElMessage.success('内容已插入到文档末尾');
+      }
+    } else if (data.type === 'replace-fragment') {
+      // 替换选中内容
+      const editor = quillEditor.value.getQuill();
+      const selection = editor.getSelection();
+      if (selection && selection.length > 0) {
+        editor.deleteText(selection.index, selection.length, 'user');
+        editor.insertText(selection.index, data.content, 'user');
+        ElMessage.success('内容已替换');
+      } else {
+        ElMessage.warning('请先选择要替换的文本');
       }
     } else if (data.type === 'stop-generation') {
       // 停止AI生成，传递片段ID
-      console.log('接收到停止生成命令', data);
       if (data.fragmentId) {
         floatingToolbarController.stopGeneration(data.fragmentId);
       } else {
@@ -181,19 +170,23 @@ const handleFragmentMessage = (message: string) => {
     } else if (data.type === 'regenerate-content') {
       // 重新生成内容，传递片段ID
       if (data.fragmentId) {
+        
         floatingToolbarController.regenerateContent(
-          editor, 
+          quillEditor.value.getQuill(), 
           props.currentChapter, 
           props.currentBook, 
           data.fragmentId
         );
+        
       } else {
         console.warn('重新生成命令缺少fragmentId');
         ElMessage.error('重新生成需要指定片段ID');
       }
+    } else {
+      console.warn('未知的片段消息类型:', data.type);
     }
   } catch (error) {
-    console.error('处理片段消息失败:', error)
+    console.error('处理片段消息失败:', error);
   }
 }
 

@@ -781,6 +781,9 @@ ipcMain.handle('update-fragment-content', async (_event, fragment: any) => {
         ...oldFragment,
         content: fragment.content,
         title: fragment.title,
+        isGenerating: fragment.isGenerating,
+        wasStopped: fragment.wasStopped,
+        updatedAt: fragment.updatedAt || new Date().toISOString()
       });
     }
 
@@ -788,7 +791,10 @@ ipcMain.handle('update-fragment-content', async (_event, fragment: any) => {
     fragmentWindow.webContents.send('content-update', {
       id: fragment.id,
       content: fragment.content,
-      title: fragment.title
+      title: fragment.title,
+      isGenerating: fragment.isGenerating,
+      wasStopped: fragment.wasStopped,
+      updatedAt: fragment.updatedAt || new Date().toISOString()
     });
 
     return { success: true, message: '片段内容已更新' };
@@ -811,12 +817,14 @@ ipcMain.handle('request-fragment-data', (_event, windowId: number) => {
     const fragment = pendingFragmentData.get(windowId);
     
     if (!fragment) {
+      console.error('没有找到对应的片段数据:', windowId);
       return { success: false, message: '没有找到对应的片段数据' };
     }
     
     // 获取发出请求的窗口
     const win = BrowserWindow.fromId(windowId);
     if (!win) {
+      console.error('没有找到对应的窗口:', windowId);
       return { success: false, message: '没有找到对应的窗口' };
     }
     
@@ -931,7 +939,11 @@ ipcMain.on('send-to-main-window', (_event, channel, ...args) => {
             document.dispatchEvent(new CustomEvent('${channel}', { detail: ${JSON.stringify(args)} }));
           `).catch(err => console.error('执行脚本失败:', err));
         }
+      } else {
+        console.error('主窗口已销毁，无法发送消息');
       }
+    } else {
+      console.error('找不到主窗口，无法发送消息');
     }
   } catch (error) {
     console.error('转发消息到主窗口失败:', error);

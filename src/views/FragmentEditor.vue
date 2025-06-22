@@ -10,7 +10,7 @@
         v-if="!isEditingTitle"
         ref="titleRef"
       >
-        {{ fragmentTitle || '新片段' }}
+        {{ fragmentTitle || '新片段' }}{{ isGenerating ? '（生成中...）' : (fragment.wasStopped ? '（已停止）' : '') }}
       </div>
       <div class="title-edit" v-else>
         <el-input 
@@ -43,7 +43,7 @@
         <el-button type="danger" size="small" @click="stopGeneration">停止生成</el-button>
       </template>
       <template v-else>
-        <template v-if="wasGenerating">
+        <template v-if="wasGenerating || fragment.wasStopped">
           <el-button type="primary" size="small" @click="regenerateContent">重新生成</el-button>
         </template>
       </template>
@@ -65,6 +65,7 @@ interface Fragment {
   createdAt: Date
   updatedAt: Date
   isGenerating?: boolean
+  wasStopped?: boolean
 }
 
 // 片段数据
@@ -73,7 +74,8 @@ const fragment = ref<Fragment>({
   content: '',
   createdAt: new Date(),
   updatedAt: new Date(),
-  isGenerating: false
+  isGenerating: false,
+  wasStopped: false
 })
 
 // 片段标题
@@ -181,6 +183,11 @@ const stopGeneration = () => {
     // 确保消息内容是字符串
     const messageStr = JSON.stringify(message);
     window.electronAPI.sendToMainWindow(messageStr);
+    
+    // 更新本地状态
+    isGenerating.value = false;
+    fragment.value.wasStopped = true;
+    
     ElMessage.info('已发送停止指令');
   } catch (error) {
     console.error('发送停止指令失败:', error);
@@ -191,18 +198,27 @@ const stopGeneration = () => {
 // 重新生成内容
 const regenerateContent = () => {
   try {
+    if (!fragment.value.id) {
+      console.error('无法重新生成：片段ID为空');
+      ElMessage.error('无法重新生成：片段ID为空');
+      return;
+    }
+    
     const message = {
       type: 'regenerate-content',
       fragmentId: fragment.value.id
     }
+    
     // 确保消息内容是字符串
     const messageStr = JSON.stringify(message);
+    // 直接发送到主窗口
     window.electronAPI.sendToMainWindow(messageStr);
-    ElMessage.info('正在重新生成...');
     
-    // 更新UI状态，显示生成中
+    // 更新本地UI状态
     isGenerating.value = true;
-    fragmentTitle.value = fragmentTitle.value.replace('（已停止）', '') + '（生成中...）';
+    fragment.value.wasStopped = false;
+    
+    ElMessage.info('正在重新生成...');
   } catch (error) {
     console.error('发送重新生成指令失败:', error);
     ElMessage.error('发送失败');
@@ -249,7 +265,8 @@ onMounted(async () => {
       content: data.content || '',
       createdAt: new Date(data.createdAt || Date.now()),
       updatedAt: new Date(data.updatedAt || Date.now()),
-      isGenerating: data.isGenerating || false
+      isGenerating: data.isGenerating || false,
+      wasStopped: data.wasStopped || false
     }
     
     // 设置标题
@@ -258,12 +275,8 @@ onMounted(async () => {
     // 设置生成状态
     isGenerating.value = data.isGenerating || false;
     
-    if (fragmentTitle.value.includes('（生成中...）')) {
-      isGenerating.value = true;
-    }
-    
-    if (fragmentTitle.value.includes('（已停止）') || 
-        (!fragmentTitle.value.includes('（生成中...）') && fragment.value.content.trim() !== '')) {
+    // 如果内容不为空或者曾经停止过，则认为曾经生成过
+    if (data.wasStopped || (!isGenerating.value && fragment.value.content.trim() !== '')) {
       wasGenerating.value = true;
     }
   };
@@ -274,7 +287,10 @@ onMounted(async () => {
   // 注册内容更新监听器
   window.electronAPI.onContentUpdate((data: any) => {
     // 如果ID不匹配，忽略此更新
-    if (data.id !== fragment.value.id) return;
+    if (data.id !== fragment.value.id) {
+      console.log('ID不匹配，忽略更新:', data.id, fragment.value.id);
+      return;
+    }
     
     // 更新内容
     fragment.value.content = data.content || fragment.value.content;
@@ -290,19 +306,17 @@ onMounted(async () => {
     // 更新生成状态
     if (data.isGenerating !== undefined) {
       isGenerating.value = data.isGenerating;
-    } else {
-      // 根据标题判断生成状态
-      if (fragmentTitle.value.includes('（生成中...）')) {
-        isGenerating.value = true;
-      } else {
-        isGenerating.value = false;
-      }
+    }
+    
+    // 更新停止状态
+    if (data.wasStopped !== undefined) {
+      fragment.value.wasStopped = data.wasStopped;
     }
 
+    // 更新重新生成按钮状态
     if ((wasGeneratingBefore && !isGenerating.value && fragment.value.content.trim() !== '') || 
-        fragmentTitle.value.includes('（已停止）') || 
-        (!fragmentTitle.value.includes('（生成中...）') && fragment.value.content.trim() !== '') ||
-        wasGenerating.value) {
+        fragment.value.wasStopped || 
+        (!isGenerating.value && fragment.value.content.trim() !== '')) {
       wasGenerating.value = true;
     }
     
