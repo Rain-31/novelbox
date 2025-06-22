@@ -38,6 +38,20 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 片段编辑器窗口特殊样式 - 确保透明背景 */
+.fragment-editor-page {
+  background-color: transparent !important;
+}
+
+/* 当URL包含fragment-editor时，应用透明背景 */
+html[data-route="fragment-editor"],
+html[data-route="fragment-editor"] body,
+html[data-route="fragment-editor"] #app {
+  background-color: transparent !important;
+  margin: 0;
+  padding: 0;
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;

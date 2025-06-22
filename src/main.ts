@@ -27,6 +27,15 @@ const router = createRouter({
   ]
 })
 
+// 添加路由变化监听，设置HTML的data-route属性
+router.beforeEach((to, _from, next) => {
+  // 从路径中提取路由名称
+  const routeName = to.path.substring(1) || 'home';
+  // 设置HTML的data-route属性
+  document.documentElement.setAttribute('data-route', routeName);
+  next();
+});
+
 const app = createApp(App)
 app.use(router)
 app.use(ElementPlus)

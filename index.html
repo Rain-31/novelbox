@@ -1,10 +1,17 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-route="home">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/public/icon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NovelBox</title>
+    <style>
+      /* 为片段编辑器页面设置透明背景 */
+      html[data-route="fragment-editor"],
+      html[data-route="fragment-editor"] body {
+        background-color: transparent !important;
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>

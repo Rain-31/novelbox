@@ -362,27 +362,8 @@ onUnmounted(() => {
   flex-direction: column;
   overflow: hidden;
   background-color: transparent; /* 完全透明 */
-}
-
-/* 通用的样式：为整体添加阴影 */
-.fragment-editor-page {
   position: relative;
   border-radius: 8px; /* 整体圆角 */
-  overflow: hidden;
-}
-
-/* 添加整体阴影 */
-.fragment-editor-page::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  z-index: -1;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
 }
 
 /* 实际内容容器，这个才是真正的圆角矩形 */
@@ -540,5 +521,22 @@ onUnmounted(() => {
 /* 移除通用的阴影样式，改用伪元素实现 */
 .window-drag-area, .editor-content, .editor-footer {
   box-shadow: none;
+}
+
+/* 添加样式修复透明窗口问题 */
+:root {
+  --fragment-bg-color: transparent;
+}
+
+/* 确保body和html也是透明的 */
+html, body {
+  background-color: var(--fragment-bg-color) !important;
+  margin: 0;
+  padding: 0;
+}
+
+/* 移除之前可能导致问题的伪元素 */
+.fragment-editor-page::after {
+  display: none;
 }
 </style> 
