@@ -180,7 +180,6 @@ const handleFragmentMessage = (message: string) => {
       }
     } else if (data.type === 'regenerate-content') {
       // 重新生成内容，传递片段ID
-      console.log('接收到重新生成命令', data);
       if (data.fragmentId) {
         floatingToolbarController.regenerateContent(
           editor, 

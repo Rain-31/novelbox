@@ -213,6 +213,28 @@ export default class FloatingToolbarController {
         }
       } else {
         console.log(`没有找到ID为 ${fragmentId} 的活跃生成任务`);
+        
+        // 检查片段是否存在，如果存在但没有活跃任务，可能是已经完成的任务
+        const fragment = this.streamingFragments.get(fragmentId);
+        if (fragment && fragment.isGenerating) {
+          // 更新片段状态为非生成状态
+          fragment.isGenerating = false;
+          if (fragment.title.includes('（生成中...）')) {
+            fragment.title = fragment.title.replace('（生成中...）', '');
+            
+            // 更新片段窗口
+            if (window.electronAPI) {
+              try {
+                await window.electronAPI.updateFragmentContent(fragment);
+              } catch (error) {
+                console.error('更新片段窗口失败:', error);
+              }
+            } else {
+              this.showFragmentCallback(fragment.content, fragment.title);
+            }
+          }
+        }
+        
         ElMessage.info('没有正在进行的AI生成任务');
       }
     } else {
@@ -245,17 +267,21 @@ export default class FloatingToolbarController {
         return;
       }
 
-      // 先停止当前任务（如果有）
+      // 先检查是否有真正活跃的任务
       const task = this.generationTasks.get(fragmentId);
-      if (task) {
-        await this.stopGeneration(fragmentId);
-      }
-
-      // 获取片段引用
       const fragment = this.streamingFragments.get(fragmentId);
+      
       if (!fragment) {
         ElMessage.error(`无法找到片段 ${fragmentId}`);
         return;
+      }
+      
+      // 只有当任务确实存在且片段处于生成状态时，才停止任务
+      if (task && fragment.isGenerating) {
+        await this.stopGeneration(fragmentId);
+      } else if (fragment.isGenerating) {
+        // 如果片段状态是生成中，但没有对应任务，直接更新状态
+        fragment.isGenerating = false;
       }
       
       // 更新片段状态为生成中
@@ -424,6 +450,11 @@ export default class FloatingToolbarController {
         
         // 更新片段窗口内容
         this.showStreamingFragment(content, '扩写内容', false, complete || false, fragmentId);
+        
+        // 如果生成完成，清理任务
+        if (complete) {
+          this.cleanupGenerationTask(fragmentId);
+        }
       };
       
       // 使用流式请求 - AIService内部会创建自己的AbortController
@@ -493,6 +524,11 @@ export default class FloatingToolbarController {
         
         // 更新片段窗口内容
         this.showStreamingFragment(content, '缩写内容', false, complete || false, fragmentId);
+        
+        // 如果生成完成，清理任务
+        if (complete) {
+          this.cleanupGenerationTask(fragmentId);
+        }
       };
       
       // 使用流式请求 - AIService内部会创建自己的AbortController
@@ -576,6 +612,11 @@ export default class FloatingToolbarController {
           
           // 更新片段窗口内容
           this.showStreamingFragment(content, '改写内容', false, complete || false, fragmentId);
+          
+          // 如果生成完成，清理任务
+          if (complete) {
+            this.cleanupGenerationTask(fragmentId);
+          }
         };
         
         // 使用流式请求 - AIService内部会创建自己的AbortController
@@ -634,6 +675,13 @@ export default class FloatingToolbarController {
       } else {
         this.cleanupRewriteState(quill);
       }
+    }
+  }
+
+  // 添加一个新方法来清理已完成的生成任务
+  private cleanupGenerationTask(fragmentId: string): void {
+    if (this.generationTasks.has(fragmentId)) {
+      this.generationTasks.delete(fragmentId);
     }
   }
 } 
