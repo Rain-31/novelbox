@@ -1,7 +1,10 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell, globalShortcut, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell, globalShortcut, screen, nativeTheme } from 'electron'
 import { enable } from '@electron/remote/main'
 import * as path from 'path'
 import * as fs from 'fs/promises';
+
+// 强制使用浅色主题，防止应用受系统主题影响
+nativeTheme.themeSource = 'light'
 
 // 存储片段窗口的映射表
 const fragmentWindows = new Map<string, BrowserWindow>();
@@ -87,7 +90,9 @@ function createWindow() {
     },
     frame: true,
     titleBarStyle: 'default',
-    icon: path.join(__dirname, '../public/icon.ico')
+    icon: path.join(__dirname, '../public/icon.ico'),
+    // 设置背景色
+    backgroundColor: '#ffffff'
   })
 
   // 监听主窗口焦点事件
