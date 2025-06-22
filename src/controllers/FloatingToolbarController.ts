@@ -445,7 +445,7 @@ export default class FloatingToolbarController {
       } else {
         fragment.isGenerating = true;
       }
-      
+
       // 检查是否在Electron环境中
       if (window.electronAPI) {
         try {
@@ -457,7 +457,9 @@ export default class FloatingToolbarController {
             createdAt: fragment.createdAt,
             updatedAt: fragment.updatedAt,
             isGenerating: fragment.isGenerating,
-            wasStopped: fragment.wasStopped
+            wasStopped: fragment.wasStopped,
+            // 添加标记，表示这个片段有生成参数
+            hasLastGenerationParams: this.lastGenerationParams.has(fragment.id)
           };
           
           await window.electronAPI.updateFragmentContent(updateData);
@@ -493,8 +495,14 @@ export default class FloatingToolbarController {
       // 检查是否在Electron环境中
       if (window.electronAPI) {
         try {
-          // 直接使用electronAPI创建窗口
-          await window.electronAPI.createFragmentWindow(fragment);
+          // 直接使用electronAPI创建窗口，并添加标记表示这是AI生成的片段
+          const fragmentWithMeta = {
+            ...fragment,
+            // 添加标记，表示这个片段有生成参数
+            hasLastGenerationParams: this.lastGenerationParams.has(fragment.id)
+          };
+          
+          await window.electronAPI.createFragmentWindow(fragmentWithMeta);
         } catch (error) {
           console.error('创建流式片段窗口失败:', error);
           ElMessage.error('创建片段窗口失败');
@@ -561,6 +569,19 @@ export default class FloatingToolbarController {
       };
       
       this.lastGenerationParams.set(fragmentId, params);
+      
+      // 更新片段窗口，传递 hasLastGenerationParams 参数
+      const fragment = this.streamingFragments.get(fragmentId);
+      if (fragment && window.electronAPI) {
+        try {
+          await window.electronAPI.updateFragmentContent({
+            ...fragment,
+            hasLastGenerationParams: true
+          });
+        } catch (error) {
+          console.error('更新片段窗口失败:', error);
+        }
+      }
 
       // 定义回调函数
       const streamCallback = (text: string, error?: string, complete?: boolean) => {
@@ -637,6 +658,19 @@ export default class FloatingToolbarController {
       };
       
       this.lastGenerationParams.set(fragmentId, params);
+      
+      // 更新片段窗口，传递 hasLastGenerationParams 参数
+      const fragment = this.streamingFragments.get(fragmentId);
+      if (fragment && window.electronAPI) {
+        try {
+          await window.electronAPI.updateFragmentContent({
+            ...fragment,
+            hasLastGenerationParams: true
+          });
+        } catch (error) {
+          console.error('更新片段窗口失败:', error);
+        }
+      }
 
       // 定义回调函数
       const streamCallback = (text: string, error?: string, complete?: boolean) => {
@@ -728,6 +762,19 @@ export default class FloatingToolbarController {
         
         this.lastGenerationParams.set(fragmentId, params);
         
+        // 更新片段窗口，传递 hasLastGenerationParams 参数
+        const fragment = this.streamingFragments.get(fragmentId);
+        if (fragment && window.electronAPI) {
+          try {
+            await window.electronAPI.updateFragmentContent({
+              ...fragment,
+              hasLastGenerationParams: true
+            });
+          } catch (error) {
+            console.error('更新片段窗口失败:', error);
+          }
+        }
+
         // 定义回调函数
         const streamCallback = (text: string, error?: string, complete?: boolean) => {
           if (error) {

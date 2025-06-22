@@ -783,6 +783,7 @@ ipcMain.handle('update-fragment-content', async (_event, fragment: any) => {
         title: fragment.title,
         isGenerating: fragment.isGenerating,
         wasStopped: fragment.wasStopped,
+        hasLastGenerationParams: fragment.hasLastGenerationParams,
         updatedAt: fragment.updatedAt || new Date().toISOString()
       });
     }
@@ -794,6 +795,7 @@ ipcMain.handle('update-fragment-content', async (_event, fragment: any) => {
       title: fragment.title,
       isGenerating: fragment.isGenerating,
       wasStopped: fragment.wasStopped,
+      hasLastGenerationParams: fragment.hasLastGenerationParams,
       updatedAt: fragment.updatedAt || new Date().toISOString()
     });
 

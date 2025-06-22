@@ -275,9 +275,14 @@ onMounted(async () => {
     // 设置生成状态
     isGenerating.value = data.isGenerating || false;
     
-    // 如果内容不为空或者曾经停止过，则认为曾经生成过
-    if (data.wasStopped || (!isGenerating.value && fragment.value.content.trim() !== '')) {
+    // 只有在以下情况才设置曾经生成过的标志：
+    // 1. 明确标记了 wasStopped 为 true
+    // 2. 有 lastGenerationParams 参数（表示之前进行过生成）
+    if (data.wasStopped || data.hasLastGenerationParams) {
       wasGenerating.value = true;
+    } else {
+      // 从片段栏直接创建的新片段，不应该显示重新生成按钮
+      wasGenerating.value = false;
     }
   };
   
