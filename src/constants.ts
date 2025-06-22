@@ -63,6 +63,15 @@ export const AI_PROVIDERS: AIProvider[] = [
     ],
     defaultTemperature: 0.7,
     defaultTopP: 0.95
+  },
+  {
+    id: 'minimax',
+    name: 'MiniMax',
+    models: [
+      { id: 'MiniMax-M1', name: 'MiniMax-M1', maxTokens: 10000 }
+    ],
+    defaultTemperature: 0.7,
+    defaultTopP: 0.95
   }
 ]
 
