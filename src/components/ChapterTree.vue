@@ -198,15 +198,22 @@ const exportWord = async () => {
   try {
     // 打开保存对话框
     const defaultPath = `${props.currentBook.title}.docx`;
-    const filePath = await window.electronAPI.saveFileAs(defaultPath);
+    // 使用类型断言处理API返回结果的不一致性
+    const result = await window.electronAPI.saveFileAs(defaultPath) as unknown as { 
+      success: boolean; 
+      message?: string; 
+      filePath?: string 
+    };
 
-    if (!filePath.success) {
-      ElMessage.error(filePath.message);
+    if (!result.success) {
+      if (result.message) {
+        ElMessage.error(result.message);
+      }
       return; // 用户取消了保存
     }
     
     const documentService = DocumentService.getInstance();
-    const fileName = await documentService.exportToWord(props.currentBook, filePath.filePath);
+    const fileName = await documentService.exportToWord(props.currentBook, result.filePath as string);
     ElMessage.success(`文档已导出为: ${fileName}`);
   } catch (error) {
     console.error('导出Word文档失败:', error);
