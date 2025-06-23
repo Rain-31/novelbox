@@ -81,7 +81,7 @@ const getPreview = (content: string): string => {
 // 监听片段保存事件
 onMounted(() => {
   // 确保只注册一次事件监听器
-  window.electronAPI.onFragmentSaved((savedFragment) => {
+  window.electronAPI.onFragmentSaved(async (savedFragment) => {
     // 保存片段到列表
     const index = fragments.value.findIndex(f => f.id === savedFragment.id)
     if (index > -1) {
@@ -89,18 +89,13 @@ onMounted(() => {
     } else {
       fragments.value.push(savedFragment)
     }
-    // 保存到小说文件
-    saveFragmentsToBook()
     
-    // 自动切换到片段栏
-    emit('switch-tab', 'fragments')
-    
-    // 尝试直接调用父窗口的方法切换到片段栏
+    // 保存到小说文件，等待保存完成
     try {
-      // 在主进程中向主窗口发送消息
-      window.electronAPI.sendToMainWindow('switch-to-fragments');
+      await saveFragmentsToBook()
+      
     } catch (error) {
-      console.error('无法切换到片段栏:', error)
+      console.error('保存片段到书籍失败:', error)
     }
   })
 })
@@ -209,7 +204,6 @@ const saveFragmentsToBook = async () => {
       lastEdited: new Date()
     }
     
-    await BookConfigService.saveBook(updatedBook)
     emit('update:book', updatedBook)
   } catch (error) {
     console.error('保存片段失败:', error)

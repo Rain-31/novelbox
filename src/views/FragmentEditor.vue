@@ -3,25 +3,12 @@
     <!-- 窗口控制区 - 可拖动，降低高度 -->
     <div class="window-drag-area" @mousedown="startDrag">
       <!-- 标题区域，不可拖动 -->
-      <div 
-        class="window-title" 
-        @mousedown.stop
-        @click="startTitleEdit" 
-        v-if="!isEditingTitle"
-        ref="titleRef"
-      >
+      <div class="window-title" @mousedown.stop @click="startTitleEdit" v-if="!isEditingTitle" ref="titleRef">
         {{ fragmentTitle || '新片段' }}{{ isGenerating ? '（生成中...）' : (fragment.wasStopped ? '（已停止）' : '') }}
       </div>
       <div class="title-edit" v-else>
-        <el-input 
-          v-model="editingTitle" 
-          size="small" 
-          @blur="saveTitleEdit"
-          @keyup.enter="saveTitleEdit"
-          @keyup.esc="cancelTitleEdit"
-          ref="titleInputRef"
-          placeholder="输入标题..."
-        />
+        <el-input v-model="editingTitle" size="small" @blur="saveTitleEdit" @keyup.enter="saveTitleEdit"
+          @keyup.esc="cancelTitleEdit" ref="titleInputRef" placeholder="输入标题..." />
       </div>
       <div class="window-controls">
         <button class="close-btn" @click="closeWindow">×</button>
@@ -29,13 +16,8 @@
     </div>
     <!-- 内容编辑区 -->
     <div class="editor-content">
-      <el-input 
-        v-model="fragment.content" 
-        type="textarea" 
-        placeholder="在此输入内容..." 
-        resize="none"
-        class="content-textarea"
-      />
+      <el-input v-model="fragment.content" type="textarea" placeholder="在此输入内容..." resize="none"
+        class="content-textarea" />
     </div>
     <div class="editor-footer">
       <!-- 生成控制按钮 -->
@@ -96,15 +78,24 @@ const wasGenerating = ref(false)
 // 保存片段
 const saveFragment = async () => {
   try {
+    // 切换到片段栏
+    try {
+      // 在主进程中向主窗口发送消息
+      window.electronAPI.sendToMainWindow('switch-to-fragments');
+
+    } catch (error) {
+      console.error('无法切换到片段栏:', error)
+    }
+
     // 更新时间戳
     fragment.value.updatedAt = new Date()
-    
+
     // 通过Electron API保存片段
     const result = await window.electronAPI.saveFragmentContent({
       ...fragment.value,
       title: fragmentTitle.value // 使用当前标题
     })
-    
+
     if (result.success) {
       ElMessage.success('内容已保存')
     } else {
@@ -118,7 +109,7 @@ const saveFragment = async () => {
 
 // 关闭窗口
 const closeWindow = () => {
-  
+
   try {
     if (fragment.value.id) {
       window.electronAPI.closeFragmentWindow(fragment.value.id);
@@ -183,11 +174,11 @@ const stopGeneration = () => {
     // 确保消息内容是字符串
     const messageStr = JSON.stringify(message);
     window.electronAPI.sendToMainWindow(messageStr);
-    
+
     // 更新本地状态
     isGenerating.value = false;
     fragment.value.wasStopped = true;
-    
+
     ElMessage.info('已发送停止指令');
   } catch (error) {
     console.error('发送停止指令失败:', error);
@@ -203,21 +194,21 @@ const regenerateContent = () => {
       ElMessage.error('无法重新生成：片段ID为空');
       return;
     }
-    
+
     const message = {
       type: 'regenerate-content',
       fragmentId: fragment.value.id
     }
-    
+
     // 确保消息内容是字符串
     const messageStr = JSON.stringify(message);
     // 直接发送到主窗口
     window.electronAPI.sendToMainWindow(messageStr);
-    
+
     // 更新本地UI状态
     isGenerating.value = true;
     fragment.value.wasStopped = false;
-    
+
     ElMessage.info('正在重新生成...');
   } catch (error) {
     console.error('发送重新生成指令失败:', error);
@@ -268,13 +259,13 @@ onMounted(async () => {
       isGenerating: data.isGenerating || false,
       wasStopped: data.wasStopped || false
     }
-    
+
     // 设置标题
     fragmentTitle.value = data.title || '新片段';
-    
+
     // 设置生成状态
     isGenerating.value = data.isGenerating || false;
-    
+
     // 只有在以下情况才设置曾经生成过的标志：
     // 1. 明确标记了 wasStopped 为 true
     // 2. 有 lastGenerationParams 参数（表示之前进行过生成）
@@ -285,10 +276,10 @@ onMounted(async () => {
       wasGenerating.value = false;
     }
   };
-  
+
   // 注册监听器
   window.electronAPI.onFragmentData(dataHandler);
-  
+
   // 注册内容更新监听器
   window.electronAPI.onContentUpdate((data: any) => {
     // 如果ID不匹配，忽略此更新
@@ -296,43 +287,43 @@ onMounted(async () => {
       console.log('ID不匹配，忽略更新:', data.id, fragment.value.id);
       return;
     }
-    
+
     // 更新内容
     fragment.value.content = data.content || fragment.value.content;
-    
+
     // 更新标题
     if (data.title) {
       fragmentTitle.value = data.title;
     }
-    
+
     // 检查之前的生成状态
     const wasGeneratingBefore = isGenerating.value;
-    
+
     // 更新生成状态
     if (data.isGenerating !== undefined) {
       isGenerating.value = data.isGenerating;
     }
-    
+
     // 更新停止状态
     if (data.wasStopped !== undefined) {
       fragment.value.wasStopped = data.wasStopped;
     }
 
     // 更新重新生成按钮状态
-    if ((wasGeneratingBefore && !isGenerating.value && fragment.value.content.trim() !== '') || 
-        fragment.value.wasStopped || 
-        (!isGenerating.value && fragment.value.content.trim() !== '')) {
+    if ((wasGeneratingBefore && !isGenerating.value && fragment.value.content.trim() !== '') ||
+      fragment.value.wasStopped ||
+      (!isGenerating.value && fragment.value.content.trim() !== '')) {
       wasGenerating.value = true;
     }
-    
+
     // 更新时间戳
     fragment.value.updatedAt = new Date();
   });
-  
+
   try {
     // 获取当前窗口ID并请求数据
     const result = await window.electronAPI.getCurrentWindowId();
-    
+
     if (result.success && result.id) {
       // 主动请求片段数据
       await window.electronAPI.requestFragmentData(result.id);
@@ -342,7 +333,7 @@ onMounted(async () => {
   } catch (error) {
     console.error('请求片段数据失败:', error);
   }
-  
+
   // 添加键盘事件监听
   window.addEventListener('keydown', handleKeyDown)
 })
@@ -361,9 +352,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background-color: transparent; /* 完全透明 */
+  background-color: transparent;
+  /* 完全透明 */
   position: relative;
-  border-radius: 8px; /* 整体圆角 */
+  border-radius: 8px;
+  /* 整体圆角 */
 }
 
 /* 实际内容容器，这个才是真正的圆角矩形 */
@@ -375,35 +368,46 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 0 8px;
-  border-top-left-radius: 8px; /* 顶部左侧圆角 */
-  border-top-right-radius: 8px; /* 顶部右侧圆角 */
+  border-top-left-radius: 8px;
+  /* 顶部左侧圆角 */
+  border-top-right-radius: 8px;
+  /* 顶部右侧圆角 */
   border-top: 1px solid rgba(230, 230, 230, 0.8);
   border-left: 1px solid rgba(230, 230, 230, 0.8);
   border-right: 1px solid rgba(230, 230, 230, 0.8);
-  box-shadow: none; /* 移除重复的阴影 */
+  box-shadow: none;
+  /* 移除重复的阴影 */
 }
 
 .window-title {
-  font-size: 13px; /* 增加字体大小 */
+  font-size: 13px;
+  /* 增加字体大小 */
   color: #606266;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 80%;
-  -webkit-app-region: no-drag; /* 确保不可拖动 */
+  -webkit-app-region: no-drag;
+  /* 确保不可拖动 */
   cursor: pointer;
-  padding: 3px 6px; /* 增加内边距 */
+  padding: 3px 6px;
+  /* 增加内边距 */
   border-radius: 3px;
-  background-color: rgba(0, 0, 0, 0.02); /* 添加轻微背景色 */
-  border: 1px solid transparent; /* 添加透明边框 */
-  margin-left: 5px; /* 添加左边距 */
-  z-index: 10; /* 确保在拖动区域上层 */
+  background-color: rgba(0, 0, 0, 0.02);
+  /* 添加轻微背景色 */
+  border: 1px solid transparent;
+  /* 添加透明边框 */
+  margin-left: 5px;
+  /* 添加左边距 */
+  z-index: 10;
+  /* 确保在拖动区域上层 */
 }
 
 .window-title:hover {
   color: #409EFF;
   background-color: rgba(64, 158, 255, 0.1);
-  border-color: rgba(64, 158, 255, 0.2); /* 显示边框 */
+  border-color: rgba(64, 158, 255, 0.2);
+  /* 显示边框 */
 }
 
 .title-edit {
@@ -454,10 +458,12 @@ onUnmounted(() => {
   padding: 0 8px;
   width: 100%;
   box-sizing: border-box;
-  background-color: #f5f7fa; /* 中间内容区域背景色 */
+  background-color: #f5f7fa;
+  /* 中间内容区域背景色 */
   border-left: 1px solid rgba(230, 230, 230, 0.8);
   border-right: 1px solid rgba(230, 230, 230, 0.8);
-  box-shadow: none; /* 移除重复的阴影 */
+  box-shadow: none;
+  /* 移除重复的阴影 */
 }
 
 /* 强制内容区填满窗口 */
@@ -485,7 +491,8 @@ onUnmounted(() => {
   resize: none;
   flex: 1;
   min-height: unset;
-  border-radius: 4px; /* 添加内部文本区域圆角 */
+  border-radius: 4px;
+  /* 添加内部文本区域圆角 */
 }
 
 /* 去掉element-plus的默认样式 */
@@ -508,18 +515,24 @@ onUnmounted(() => {
   justify-content: center;
   gap: 10px;
   padding: 5px 0;
-  background-color: #f5f7fa; /* 底部区域背景色 */
-  border-bottom-left-radius: 8px; /* 底部左侧圆角 */
-  border-bottom-right-radius: 8px; /* 底部右侧圆角 */
+  background-color: #f5f7fa;
+  /* 底部区域背景色 */
+  border-bottom-left-radius: 8px;
+  /* 底部左侧圆角 */
+  border-bottom-right-radius: 8px;
+  /* 底部右侧圆角 */
   border-top: 1px solid rgba(230, 230, 230, 0.5);
   border-bottom: 1px solid rgba(230, 230, 230, 0.8);
   border-left: 1px solid rgba(230, 230, 230, 0.8);
   border-right: 1px solid rgba(230, 230, 230, 0.8);
-  box-shadow: none; /* 移除重复的阴影 */
+  box-shadow: none;
+  /* 移除重复的阴影 */
 }
 
 /* 移除通用的阴影样式，改用伪元素实现 */
-.window-drag-area, .editor-content, .editor-footer {
+.window-drag-area,
+.editor-content,
+.editor-footer {
   box-shadow: none;
 }
 
@@ -529,7 +542,8 @@ onUnmounted(() => {
 }
 
 /* 确保body和html也是透明的 */
-html, body {
+html,
+body {
   background-color: var(--fragment-bg-color) !important;
   margin: 0;
   padding: 0;
@@ -539,4 +553,4 @@ html, body {
 .fragment-editor-page::after {
   display: none;
 }
-</style> 
+</style>
