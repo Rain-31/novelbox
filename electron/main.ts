@@ -291,18 +291,32 @@ function createMenu() {
       label: '帮助',
       submenu: [
         {
-          label: '关于',
+          label: '使用帮助',
           click: async () => {
-            const win = BrowserWindow.getFocusedWindow();
-            if (win) {
-              win.webContents.send('open-about-page');
-            }
+            // 打开帮助文档
+            const helpPath = path.join(app.getAppPath(), 'public', 'help', 'help.html');
+            await shell.openPath(helpPath).catch(async (err) => {
+              console.error('打开帮助文档失败:', err);
+              // 如果直接打开失败，尝试用默认浏览器打开
+              await shell.openExternal('file://' + helpPath).catch(e => {
+                console.error('使用浏览器打开帮助文档失败:', e);
+              });
+            });
           }
         },
         {
           label: '访问官网',
           click: async () => {
             await shell.openExternal('https://github.com/Rain-31/novelbox');
+          }
+        },
+        {
+          label: '关于',
+          click: async () => {
+            const win = BrowserWindow.getFocusedWindow();
+            if (win) {
+              win.webContents.send('open-about-page');
+            }
           }
         },
       ]

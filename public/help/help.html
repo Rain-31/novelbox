@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NovelBox 使用帮助</title>
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --secondary-color: #6366f1;
+            --text-color: #333;
+            --light-bg: #f9fafb;
+            --border-color: #e5e7eb;
+            --hover-color: #eff6ff;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--light-bg);
+            padding: 0;
+            margin: 0;
+        }
+        
+        .container {
+            display: flex;
+            max-width: 1200px;
+            margin: 0 auto;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            width: 280px;
+            background-color: white;
+            border-right: 1px solid var(--border-color);
+            padding: 1.5rem 0;
+            overflow-y: auto;
+            position: fixed;
+            height: 100vh;
+        }
+        
+        .content {
+            flex: 1;
+            padding: 2rem;
+            margin-left: 280px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .header img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 1rem;
+        }
+        
+        .header h1 {
+            font-size: 1.8rem;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+        
+        .nav-menu {
+            list-style: none;
+        }
+        
+        .nav-menu li {
+            padding: 0.5rem 1.5rem;
+            cursor: pointer;
+        }
+        
+        .nav-menu li a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            font-size: 0.95rem;
+            transition: color 0.2s;
+        }
+        
+        .nav-menu li:hover {
+            background-color: var(--hover-color);
+        }
+        
+        .nav-menu li:hover a {
+            color: var(--primary-color);
+        }
+        
+        .submenu {
+            list-style: none;
+            margin-left: 1rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+        
+        .submenu.active {
+            display: block;
+        }
+        
+        .menu-section {
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #4b5563;
+            padding: 0.5rem 1.5rem;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        h2 {
+            color: var(--primary-color);
+            margin: 2rem 0 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        h3 {
+            margin: 1.5rem 0 1rem;
+            color: #4b5563;
+        }
+        
+        p, ul, ol {
+            margin-bottom: 1rem;
+        }
+        
+        ul, ol {
+            margin-left: 1.5rem;
+        }
+        
+        li {
+            margin-bottom: 0.5rem;
+        }
+        
+        code {
+            background-color: #f1f5f9;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .screenshot {
+            max-width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .tip {
+            background-color: #e0f2fe;
+            border-left: 4px solid #3b82f6;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0.25rem;
+        }
+        
+        .warning {
+            background-color: #fff7ed;
+            border-left: 4px solid #f97316;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0.25rem;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .top-button {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background-color: var(--primary-color);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .top-button.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="header">
+                <img src="../icon.ico" alt="NovelBox Logo">
+                <h1>NovelBox</h1>
+                <p>AI辅助小说创作工具</p>
+            </div>
+            
+            <ul class="nav-menu">
+                <li class="menu-section">入门指南</li>
+                <li><a href="#installation">安装与启动</a></li>
+                <li><a href="#first-use">首次使用配置</a></li>
+                
+                <li class="menu-section">基本功能</li>
+                <li><a href="#book-management">书库管理</a></li>
+                <li><a href="#chapter-management">章节管理</a></li>
+                <li><a href="#ai-writing">AI辅助创作</a></li>
+                <li><a href="#fragments">片段功能</a></li>
+                
+                <li class="menu-section">高级功能</li>
+                <li><a href="#proofreading">智能校对</a></li>
+                <li><a href="#export">导出功能</a></li>
+                <li><a href="#tools">实用工具</a></li>
+                
+                <li class="menu-section">使用技巧</li>
+                <li><a href="#tips">高级技巧</a></li>
+                <li><a href="#troubleshooting">故障排除</a></li>
+            </ul>
+        </aside>
+        
+        <main class="content">
+            <h2 id="installation">1. 安装与启动</h2>
+            
+            <h3>1.1 安装要求</h3>
+            <ul>
+                <li>Windows 10/11 64位操作系统</li>
+            </ul>
+            
+            <h3>1.2 安装步骤</h3>
+            <ol>
+                <li>从<a href="https://github.com/Rain-31/novelbox/releases" target="_blank">官方发布页</a>下载最新版安装包</li>
+                <li>运行下载的安装程序</li>
+                <li>按照安装向导完成安装</li>
+            </ol>
+            
+            <h3>1.3 启动应用</h3>
+            <ul>
+                <li>从桌面快捷方式或开始菜单启动NovelBox</li>
+            </ul>
+            
+            <h2 id="first-use">2. 首次使用配置</h2>
+            
+            <h3>2.1 选择工作区</h3>
+            <ol>
+                <li>首次启动NovelBox时，系统会提示您选择一个工作区文件夹</li>
+                <li>工作区是存储所有小说项目和配置文件的位置</li>
+                <li>点击"选择文件夹"按钮，浏览并选择一个空文件夹或创建新文件夹</li>
+                <li>确认选择后，系统将初始化工作区</li>
+            </ol>
+            
+            <div class="tip">
+                <strong>提示：</strong> 建议选择一个专用的空文件夹作为工作区，并定期备份该文件夹内容。
+            </div>
+            
+            <h3>2.2 配置AI服务</h3>
+            <ol>
+                <li>打开应用后，点击主界面上方的"⚙️ AI配置"按钮</li>
+                <li>选择AI服务商：支持OpenAI、Anthropic、Google Gemini、DeepSeek、MiniMax</li>
+                <li>选择AI模型</li>
+                <li>输入API密钥</li>
+                <li>配置代理服务器（如需）</li>
+                <li>点击"更多设置"调整模型参数：
+                    <ul>
+                        <li>Temperature：控制生成内容的创造性（值越大想象力越丰富）</li>
+                        <li>Top P：控制输出多样性（值越小输出越保守）</li>
+                        <li>最大Token数：控制生成文本的最大长度</li>
+                    </ul>
+                </li>
+                <li>点击"保存"完成配置</li>
+            </ol>
+            
+            <div class="tip">
+                <strong>提示：</strong> 不同的AI服务商需要不同的API密钥。请确保在各自官网注册并获取有效的API密钥。
+            </div>
+            
+            <h3>2.3 自定义服务商（可选）</h3>
+            <ol>
+                <li>在AI配置界面点击"自定义服务商"按钮</li>
+                <li>填写服务商名称、API域名、API路径和模型名称</li>
+                <li>点击"保存"添加自定义服务商</li>
+            </ol>
+            
+            <div class="tip">
+                <strong>提示：</strong> 您可以添加本地运行的AI模型，如Ollama等，只需配置正确的API域名和路径。
+            </div>
+            
+            <h4>本地Ollama配置示例</h4>
+            <p>以下是配置本地Ollama服务的示例：</p>
+            <img src="customProviders.png" alt="自定义服务商配置示例" class="screenshot">
+            <p>在此示例中：</p>
+            <ul>
+                <li><strong>名称</strong>：ollama（您可以使用任何名称标识此服务商）</li>
+                <li><strong>API域名</strong>：http://localhost:11434（本地Ollama服务的默认地址）</li>
+                <li><strong>API路径</strong>：/v1/chat/completions（Ollama的API路径）</li>
+                <li><strong>模型</strong>：deepseek-r1.32b（您安装的Ollama模型名称）</li>
+            </ul>
+            
+            <h3>2.4 提示词配置（可选）</h3>
+            <ol>
+                <li>在AI配置界面点击"提示词配置"按钮</li>
+                <li>可自定义多种场景下的提示词：
+                    <ul>
+                        <li>生成书名简介提示词</li>
+                        <li>生成设定提示词</li>
+                        <li>生成剧情大纲提示词</li>
+                        <li>生成章节细纲提示词</li>
+                        <li>生成小说章节提示词</li>
+                        <li>生成小说首章提示词</li>
+                        <li>续写提示词</li>
+                        <li>扩写提示词</li>
+                        <li>缩写提示词</li>
+                        <li>改写提示词</li>
+                        <li>更新设定提示词</li>
+                    </ul>
+                </li>
+                <li>点击"保存"完成配置</li>
+            </ol>
+            
+            <h2 id="book-management">3. 书库管理</h2>
+            
+            <h3>3.1 创建新书</h3>
+            <ol>
+                <li>在主界面点击右上角的"+ 创建新书"按钮</li>
+                <li>填写书名</li>
+                <li>填写简介（可手动输入或点击"🤖 AI生成"）</li>
+                <li>点击"保存"创建新书</li>
+            </ol>
+            
+            <h4>使用AI生成书名和简介</h4>
+            <ol>
+                <li>在创建新书或编辑书籍对话框中，点击"🤖 AI生成"按钮</li>
+                <li>在弹出的AI生成对话框中，输入有关小说的内容（如起点风、番茄风、传统文学、主角设定、主要金手指等）</li>
+                <li>点击"生成"按钮，AI将根据您的输入生成合适的书名和简介</li>
+                <li>生成完成后，您可以查看和修改AI生成的内容</li>
+                <li>点击"应用"按钮将自动填充书名和简介到创建界面中</li>
+                <li>如果生成结果不满意，可以修改输入内容后重新生成</li>
+            </ol>
+            
+            <div class="tip">
+                <strong>提示：</strong> 为了获得更好的生成结果，请尽可能详细地描述您的小说构思。AI会根据您提供的信息，生成符合特定小说类型风格的书名和简介。
+            </div>
+            
+            <h3>3.2 管理已有书籍</h3>
+            <ul>
+                <li><strong>打开</strong>：点击书籍卡片上的"打开"按钮进入编辑界面</li>
+                <li><strong>编辑</strong>：点击"编辑"按钮修改书名和简介</li>
+                <li><strong>删除</strong>：点击"删除"按钮并确认删除书籍</li>
+            </ul>
+            
+            <div class="warning">
+                <strong>注意：</strong> 删除书籍操作不可恢复。请确保在删除前备份重要内容。
+            </div>
+            
+            <h2 id="chapter-management">4. 章节管理</h2>
+            
+            <h3>4.1 创建卷与章节</h3>
+            <ol>
+                <li>在编辑界面左侧章节树中点击"+"按钮添加新卷</li>
+                <li>在卷节点上点击"+"按钮添加新章节</li>
+                <li>双击节点或点击编辑按钮可修改卷/章节名称</li>
+            </ol>
+            
+            <h3>4.2 编辑章节内容</h3>
+            <ol>
+                <li>在章节树中选择要编辑的章节</li>
+                <li>在右侧编辑器中输入或编辑内容</li>
+                <li>编辑内容会自动保存</li>
+            </ol>
+            
+            <h3>4.3 删除卷/章节</h3>
+            <ul>
+                <li>点击节点旁的删除按钮（🗑️）删除卷或章节</li>
+            </ul>
+            
+            <h2 id="ai-writing">5. AI辅助创作</h2>
+            
+            <h3>5.1 小说设定与大纲生成</h3>
+            
+            <h4>5.1.1 生成小说设定</h4>
+            <ol>
+                <li>点击界面右上角的"📝 大纲"按钮</li>
+                <li>在大纲面板中选择"设定"标签页</li>
+                <li>输入设定要求（如世界观、人物设定、能力体系等）</li>
+                <li>点击"AI功能"-"AI润色"按钮</li>
+                <li>生成完成后，可以查看和编辑生成的设定内容</li>
+                <li>点击"保存设定"按钮应用更改</li>
+            </ol>
+            
+            <div class="tip">
+                <strong>提示：</strong> 设定是小说的基础框架，包括人物设定、世界观设定和特殊设定（如修炼体系、能力体系等）。详细的设定有助于保持故事的一致性。
+            </div>
+            
+            <h4>5.1.2 生成剧情大纲</h4>
+            <ol>
+                <li>在大纲面板中选择"大纲"标签页</li>
+                <li>输入大纲要求（如故事走向、主要冲突、结局等）</li>
+                <li>点击"AI生成"按钮</li>
+                <li>生成完成后，可以查看和编辑生成的大纲内容</li>
+                <li>点击"保存大纲"按钮应用更改</li>
+            </ol>
+            
+            <div class="tip">
+                <strong>提示：</strong> 剧情大纲通常会按卷划分，每卷包含主题、核心矛盾、重要事件、场景和转折点等内容。良好的大纲有助于保持故事的连贯性和节奏感。
+            </div>
+            
+            <h3>5.2 章节细纲生成</h3>
+            <ol>
+                <li>选择一个章节</li>
+                <li>点击"章节细纲"按钮</li>
+                <li>在弹出面板中点击"AI生成细纲"生成章节细节大纲</li>
+                <li>查看并编辑生成的细纲内容</li>
+                <li>点击"保存"按钮应用更改</li>
+            </ol>
+            
+            <div class="tip">
+                <strong>重要提示：</strong> 章节细纲中的章节号（如"第1章"）是程序区分前文和当前章节的重要依据。在编辑细纲时，请确保保留或正确设置章节号，这样系统才能正确识别章节顺序，并在生成内容时准确引用前文内容。
+            </div>
+            
+            <div class="warning">
+                <strong>注意：</strong> 如果章节细纲中没有明确的章节号标识，可能会导致AI在生成章节内容时无法正确引用前文，影响内容的连贯性和一致性。
+            </div>
+            
+            <h3>5.3 AI生成章节内容</h3>
+            <ol>
+                <li>选择一个已有章节细纲的章节</li>
+                <li>在编辑器界面点击工具栏中的"AI生成"按钮</li>
+                <li>系统会自动分析前文内容、章节细纲和设定</li>
+                <li>AI将生成完整的章节内容，保持与前文的连贯性</li>
+                <li>生成过程中可点击"停止生成"中断</li>
+                <li>生成完成后可以查看和编辑内容</li>
+            </ol>
+            
+            <div class="tip">
+                <strong>关联前文特性：</strong> AI生成章节功能会自动分析之前章节的内容，确保新生成的章节与前文情节、人物和设定保持一致。这使得整个小说内容更加连贯，避免出现前后矛盾的情况。
+            </div>
+            
+            <div class="tip">
+                <strong>首章生成：</strong> 对于小说的第一章，系统会使用特殊的首章生成模式，着重于引入主角、建立故事世界和设定基调，以吸引读者继续阅读。
+            </div>
+
+            <h3>5.4 AI续写</h3>
+            <ol>
+                <li>在编辑器中编写部分内容</li>
+                <li>将光标放在需要续写的位置</li>
+                <li>在底部输入框中输入续写指导（如情节方向）</li>
+                <li>点击"AI续写"按钮生成后续内容</li>
+                <li>生成过程中可点击"停止生成"中断</li>
+            </ol>
+            
+            <h3>5.5 文本扩写/缩写</h3>
+            <ol>
+                <li>在编辑器中选中要处理的文本</li>
+                <li>在弹出的浮动工具栏中选择"扩写"或"缩写"</li>
+                <li>AI会根据选项自动处理选中文本</li>
+            </ol>
+            
+            <h3>5.6 文本改写</h3>
+            <ol>
+                <li>选中要改写的文本</li>
+                <li>在浮动工具栏中点击"改写"</li>
+                <li>输入改写要求（可选）</li>
+                <li>AI会根据要求改写选中文本</li>
+            </ol>
+            
+            <div class="tip">
+                <strong>提示：</strong> 为了获得更好的AI生成效果，请尽可能提供明确的指导信息，如情节方向、人物情感、场景描述等。
+            </div>
+            
+            <h2 id="fragments">6. 片段功能</h2>
+            
+            <h3>6.1 创建片段</h3>
+            <ol>
+                <li>点击左侧边栏顶部的切换按钮，切换到"片段"面板</li>
+                <li>点击"+"按钮创建新片段</li>
+                <li>在片段编辑窗口中输入内容</li>
+            </ol>
+            
+            <h3>6.2 从AI生成结果创建片段</h3>
+            <ul>
+                <li>当AI生成内容后，可以将生成结果保存为片段以便后续使用</li>
+            </ul>
+            
+            <h3>6.3 管理片段</h3>
+            <ul>
+                <li>点击片段可查看内容</li>
+                <li><strong>删除</strong>：点击片段旁的删除按钮</li>
+                <li><strong>应用片段</strong>：可将片段内容插入到当前编辑的章节中</li>
+            </ul>
+            
+            <h2 id="proofreading">7. 智能校对</h2>
+            
+            <ol>
+                <li>完成章节编写后，点击编辑器工具栏中的校对按钮✓打开校对面板</li>
+                <li>系统会调用AI自动检查文本中的错别字、语法错误、标点使用不当和敏感词</li>
+                <li>校对结果会在面板中以高亮方式显示，并提供修改建议</li>
+                <li>您可以选择接受或忽略每个修改建议</li>
+                <li>点击"应用所有修改"按钮一次性应用所有接受的修改</li>
+            </ol>
+            
+            <img src="proofreader.png" alt="智能校对功能界面" class="screenshot">
+            
+            <div class="tip">
+                <strong>提示：</strong> 智能校对功能特别适合在完成章节后使用，可以帮助发现人眼容易忽略的错误，并检查可能的敏感内容，避免发布后遇到问题。
+            </div>
+            
+            <h2 id="export">8. 导出功能</h2>
+            
+            <h3>8.1 导出为Word文档</h3>
+            <ol>
+                <li>在章节树界面点击左上角的导出按钮（文档图标，如下图红圈所示）</li>
+                <li>在弹出的文件保存对话框中选择保存位置</li>
+                <li>系统会将小说内容按章节顺序导出为DOCX格式文件</li>
+                <li>导出完成后可以使用Microsoft Word或其他支持docx格式的软件打开查看</li>
+            </ol>
+            
+            <img src="exportWord.png" alt="导出Word文档按钮位置" class="screenshot">
+            <h2 id="tools">9. 实用工具</h2>
+            
+            <h3>9.1 搜索和替换</h3>
+            <ol>
+                <li>使用快捷键或点击搜索按钮打开搜索面板</li>
+                <li>输入搜索词</li>
+                <li>可选择替换为新文本</li>
+                <li>点击"替换"或"全部替换"应用更改</li>
+            </ol>
+            
+            <h3>9.2 字数统计</h3>
+            <ul>
+                <li>编辑器底部会实时显示当前章节的字数统计</li>
+            </ul>
+            
+            <h2 id="tips">10. 高级技巧</h2>
+            
+            <h3>10.1 优化AI生成效果</h3>
+            <ul>
+                <li>调整Temperature和Top P参数影响生成内容的创造性和多样性</li>
+                <li>提供明确的续写指导可获得更符合预期的内容</li>
+                <li>使用片段功能保存多个AI生成版本，选择最佳结果</li>
+            </ul>
+            
+            <h3>10.2 组织章节结构</h3>
+            <ul>
+                <li>使用卷功能组织大型作品</li>
+                <li>为章节添加编号和标题，便于管理</li>
+                <li>使用大纲功能规划整体故事结构</li>
+            </ul>
+            
+            <h2 id="troubleshooting">11. 故障排除</h2>
+            
+            <h3>11.1 AI连接问题</h3>
+            <ul>
+                <li>检查API密钥是否正确</li>
+                <li>确认网络连接稳定</li>
+                <li>如需使用代理，正确配置代理设置</li>
+            </ul>
+            
+            <h3>11.2 自动保存问题</h3>
+            <ul>
+                <li>应用会自动保存内容，如遇问题可手动保存</li>
+                <li>定期备份重要作品</li>
+            </ul>
+            
+            <footer>
+                <p>NovelBox - 专为小说创作者设计的AI辅助创作工具</p>
+                <p>&copy; 2023-2024 NovelBox. 保留所有权利。</p>
+            </footer>
+        </main>
+    </div>
+    
+    <a href="#" class="top-button" id="topButton">↑</a>
+
+    <script>
+        // 滚动到顶部按钮
+        const topButton = document.getElementById('topButton');
+        
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 300) {
+                topButton.classList.add('visible');
+            } else {
+                topButton.classList.remove('visible');
+            }
+        });
+        
+        topButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        
+        // 平滑滚动到锚点
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const targetId = this.getAttribute('href');
+                if (targetId === '#') return;
+                
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    targetElement.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
