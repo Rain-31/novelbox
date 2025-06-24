@@ -11,17 +11,6 @@
       <Settings @close="closeSettings" />
     </div>
     
-    <!-- 浮动编辑窗口 -->
-    <FloatingEditor 
-      :visible="windowState.visible" 
-      :initialTitle="windowState.fragment?.title || ''" 
-      :initialContent="windowState.fragment?.content || ''" 
-      :fragmentId="windowState.fragment?.id || ''" 
-      @save="handleSaveFragment" 
-      @close="handleCloseWindow" 
-      @minimize="handleMinimizeWindow"
-    />
-    
     <!-- 最小化的片段列表 -->
     <div class="minimized-fragments" v-if="minimizedFragments.length > 0">
       <div 
@@ -49,44 +38,8 @@ const showAIConfigModal = ref(false)
 const showAbout = ref(false)
 const showSettings = ref(false)
 
-// 获取浮动窗口状态
-const windowState = computed(() => floatingWindowService.getWindowState())
 // 获取最小化的片段列表
 const minimizedFragments = computed(() => floatingWindowService.getMinimizedFragments())
-
-// 处理保存片段
-const handleSaveFragment = (fragment: any) => {
-  // 在这里实现保存片段到存储的逻辑
-  const savedFragment = {
-    id: fragment.id,
-    title: fragment.title,
-    content: fragment.content,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  }
-  
-  // 保存到localStorage的示例
-  const fragments = JSON.parse(localStorage.getItem('fragments') || '[]')
-  const index = fragments.findIndex((f: any) => f.id === savedFragment.id)
-  
-  if (index > -1) {
-    fragments[index] = savedFragment
-  } else {
-    fragments.push(savedFragment)
-  }
-  
-  localStorage.setItem('fragments', JSON.stringify(fragments))
-}
-
-// 处理关闭窗口
-const handleCloseWindow = () => {
-  floatingWindowService.closeWindow()
-}
-
-// 处理最小化窗口
-const handleMinimizeWindow = () => {
-  floatingWindowService.minimizeWindow()
-}
 
 // 处理恢复窗口
 const handleRestoreWindow = (fragmentId: string) => {
