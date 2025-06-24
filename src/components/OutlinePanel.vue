@@ -16,7 +16,7 @@
     </div>
     <div class="outline-content">
       <div v-show="activeTab === 'setting'" class="tab-panel" data-tab="setting">
-        <textarea v-model="settingContent" class="content-input" placeholder="写一些关于设定的想法，越多越好..." @input="saveContent"
+        <textarea v-model="settingContent" class="content-input" placeholder="写一些关于设定的想法，越多越好，点击'AI功能'-'AI润色'按钮..." @input="saveContent"
           :disabled="isGenerating"></textarea>
         <div class="button-group">
           <div class="ai-dropdown">
