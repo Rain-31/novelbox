@@ -10,41 +10,18 @@
     <div v-if="showSettings" class="modal">
       <Settings @close="closeSettings" />
     </div>
-    
-    <!-- 最小化的片段列表 -->
-    <div class="minimized-fragments" v-if="minimizedFragments.length > 0">
-      <div 
-        v-for="fragment in minimizedFragments" 
-        :key="fragment.id" 
-        class="minimized-fragment-item"
-        @click="handleRestoreWindow(fragment.id)"
-      >
-        <el-tooltip :content="fragment.title" placement="top">
-          <div class="minimized-icon">{{ fragment.title.substring(0, 1) }}</div>
-        </el-tooltip>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import AIConfigModal from './components/AIConfigModal.vue'
 import About from './views/About.vue'
 import Settings from './views/Settings.vue'
-import { floatingWindowService } from './services/floatingWindowService'
 
 const showAIConfigModal = ref(false)
 const showAbout = ref(false)
 const showSettings = ref(false)
-
-// 获取最小化的片段列表
-const minimizedFragments = computed(() => floatingWindowService.getMinimizedFragments())
-
-// 处理恢复窗口
-const handleRestoreWindow = (fragmentId: string) => {
-  floatingWindowService.restoreWindow(fragmentId)
-}
 
 onMounted(() => {
   window.electronAPI.onOpenAISettings(() => {
