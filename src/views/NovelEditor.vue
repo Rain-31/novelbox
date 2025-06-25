@@ -16,26 +16,17 @@
           </button>
         </div>
       </div>
-      <OutlinePanel :show="showOutline" @close="showOutline = false" :currentBook="currentBook" :currentChapter="currentChapter" />
-      <OutlineDetail :show="showDetailOutline" @close="showDetailOutline = false" :currentBook="currentBook" :currentChapter="currentChapter" />
+      <OutlinePanel :show="showOutline" @close="showOutline = false" :currentBook="currentBook"
+        :currentChapter="currentChapter" />
+      <OutlineDetail :show="showDetailOutline" @close="showDetailOutline = false" :currentBook="currentBook"
+        :currentChapter="currentChapter" />
     </div>
     <div class="editor-main">
       <div class="editor-sidebar">
-        <ChapterTree 
-          v-if="activeTab === 'chapters'" 
-          :chapters="currentBook?.content || []" 
-          :currentBook="currentBook" 
-          @update:chapters="handleChaptersUpdate" 
-          @select-chapter="handleChapterSelect" 
-          @switch-tab="handleSwitchTab"
-        />
-        <FragmentPane 
-          v-else 
-          :bookId="currentBook?.id || ''" 
-          :currentBook="currentBook"
-          @switch-tab="handleSwitchTab"
-          @update:book="handleBookUpdate"
-        />
+        <ChapterTree v-if="activeTab === 'chapters'" :chapters="currentBook?.content || []" :currentBook="currentBook"
+          @update:chapters="handleChaptersUpdate" @select-chapter="handleChapterSelect" @switch-tab="handleSwitchTab" />
+        <FragmentPane v-else :bookId="currentBook?.id || ''" :currentBook="currentBook" @switch-tab="handleSwitchTab"
+          @update:book="handleBookUpdate" />
       </div>
       <div class="editor-content">
         <TextEditor :current-chapter="currentChapter" :current-book="currentBook" @save-content="handleSaveContent" />
@@ -90,7 +81,7 @@ const handleSwitchTab = (tab: 'chapters' | 'fragments') => {
 
 const handleChaptersUpdate = async (chapters: Chapter[]) => {
   if (!currentBook.value) return
-  
+
   currentBook.value = {
     ...currentBook.value,
     content: chapters,
@@ -142,6 +133,13 @@ const handleBookUpdate = async (book: Book) => {
   await BookConfigService.saveBook(currentBook.value)
 }
 
+const backToLibrary = () => {
+  router.push('/')
+}
+
+// 定义事件处理函数
+let switchToFragmentsHandler: (() => void) | null = null;
+
 onMounted(async () => {
   const currentBookId = localStorage.getItem('currentBookId')
   if (currentBookId) {
@@ -155,28 +153,25 @@ onMounted(async () => {
       console.error('获取书籍信息失败', e)
     }
   }
-  
+
   // 监听从主进程发来的切换到片段栏的消息
   if (window.electronAPI) {
     // 注册一个监听器，监听switch-to-fragments事件
-    const switchToFragmentsHandler = () => {
+    switchToFragmentsHandler = () => {
       activeTab.value = 'fragments';
     };
-    
+
     // 自定义事件监听
     document.addEventListener('switch-to-fragments', switchToFragmentsHandler);
-    
-    // 清理函数
-    onBeforeUnmount(() => {
-      document.removeEventListener('switch-to-fragments', switchToFragmentsHandler);
-    });
   }
 })
 
-const backToLibrary = () => {
-  router.push('/')
-}
-
+// 在组件卸载前移除事件监听器
+onBeforeUnmount(() => {
+  if (switchToFragmentsHandler) {
+    document.removeEventListener('switch-to-fragments', switchToFragmentsHandler);
+  }
+});
 </script>
 
 <style scoped>
