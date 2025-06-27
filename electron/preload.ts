@@ -37,7 +37,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   closeFragmentWindow: (fragmentId: string) => ipcRenderer.send('close-fragment-window', fragmentId),
   minimizeFragmentWindow: (fragmentId: string) => ipcRenderer.send('minimize-fragment-window', fragmentId),
   saveFragmentContent: (fragment: any) => ipcRenderer.invoke('save-fragment-content', fragment),
-  onFragmentSaved: (callback: (fragment: any) => void) => ipcRenderer.on('fragment-saved', (_event, fragment) => callback(fragment)),
+  onFragmentSaved: (callback: (fragment: any) => void) => {
+    // 先移除所有现有的 fragment-saved 事件监听器
+    ipcRenderer.removeAllListeners('fragment-saved');
+    // 然后添加新的监听器
+    return ipcRenderer.on('fragment-saved', (_event, fragment) => callback(fragment));
+  },
   onFragmentData: (callback: (fragment: any) => void) => ipcRenderer.on('fragment-data', (_event, fragment) => callback(fragment)),
   startDrag: () => ipcRenderer.send('window-drag'),
   closeCurrentWindow: () => ipcRenderer.send('close-current-window'),

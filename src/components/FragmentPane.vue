@@ -55,7 +55,7 @@ import { ElMessage } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { v4 as uuidv4 } from 'uuid'
 import SidebarToggle from './SidebarToggle.vue'
-import { BookConfigService, type Fragment, type Book } from '../services/bookConfigService'
+import { type Fragment, type Book } from '../services/bookConfigService'
 
 const props = defineProps<{
   bookId: string
@@ -80,7 +80,6 @@ const getPreview = (content: string): string => {
 
 // 监听片段保存事件
 onMounted(() => {
-  // 确保只注册一次事件监听器
   window.electronAPI.onFragmentSaved(async (savedFragment) => {
     // 保存片段到列表
     const index = fragments.value.findIndex(f => f.id === savedFragment.id)
