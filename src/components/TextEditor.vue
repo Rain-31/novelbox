@@ -125,7 +125,7 @@ const calculateWordCount = () => {
   }
 }
 
-// 初始化AI生成按钮文本
+// 初始化AI生成按钮
 const initAIGenerateButton = () => {
   aiChapterGenerateController.initGenerateButton();
 }
@@ -214,11 +214,41 @@ const handleRewriteSelectedText = async () => {
   await floatingToolbarController.rewriteSelectedText(editor, props.currentChapter, props.currentBook);
 };
 
+let saveTimeout: NodeJS.Timeout | null = null;
+let isNewChapter = false;
+let isModified = false;
+// 添加工具栏观察器
+let toolbarObserver: MutationObserver | null = null;
+
+// 监听工具栏变化
+const observeToolbar = () => {
+  if (toolbarObserver) {
+    toolbarObserver.disconnect();
+  }
+  
+  toolbarObserver = new MutationObserver(() => {
+    // 当工具栏发生变化时，初始化AI生成按钮
+    initAIGenerateButton();
+  });
+  
+  const toolbar = document.querySelector('.ql-toolbar');
+  if (toolbar) {
+    toolbarObserver.observe(toolbar, {
+      childList: true,
+      subtree: true,
+      attributes: true
+    });
+  }
+};
+
 onMounted(() => {
-  // 使用nextTick确保DOM更新完成
+  // 组件挂载后立即初始化AI生成按钮
+  initAIGenerateButton()
+  
+  // 设置工具栏观察器
   nextTick(() => {
-    initAIGenerateButton()
-  })
+    observeToolbar();
+  });
 
   // 添加对片段编辑器消息的处理
   if (window.electronAPI) {
@@ -227,9 +257,6 @@ onMounted(() => {
 })
 
 // 使用防抖处理，避免频繁保存，设置2秒延迟
-let saveTimeout: NodeJS.Timeout | null = null;
-let isNewChapter = false;
-let isModified = false;
 watch(content, (newValue) => {
   if (saveTimeout) {
     clearTimeout(saveTimeout);
@@ -247,6 +274,11 @@ watch(content, (newValue) => {
 })
 // 组件卸载前保存
 onBeforeUnmount(() => {
+  if (toolbarObserver) {
+    toolbarObserver.disconnect();
+    toolbarObserver = null;
+  }
+  
   if (props.currentChapter?.type === 'chapter' && isModified) {
     saveChapterContent(props.currentChapter.id, content.value);
   }
@@ -453,6 +485,8 @@ watch(() => props.currentChapter, async (newChapter, oldChapter) => {
                 editor.enable();
                 // 在内容更新完成后立即计算字数
                 calculateWordCount();
+                // 初始化AI生成按钮
+                initAIGenerateButton();
                 resolve();
               });
             });

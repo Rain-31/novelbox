@@ -14,6 +14,7 @@ export class AIChapterGenerateController {
   private isGenerating = ref(false);
   private generationTask = ref<{ cancel?: () => void; error?: string; text?: string } | null>(null);
   private options: AIChapterGenerateOptions;
+  private buttonObserver: MutationObserver | null = null;
 
   constructor(options: AIChapterGenerateOptions) {
     this.options = options;
@@ -27,13 +28,39 @@ export class AIChapterGenerateController {
    * 初始化AI生成按钮文本
    */
   initGenerateButton() {
+    // 立即尝试设置按钮文本
+    this.setButtonContent();
+    
+    // 如果按钮不存在，设置DOM观察器来监听按钮何时出现
+    if (!document.querySelector('.ql-ai-generate') && !this.buttonObserver) {
+      this.buttonObserver = new MutationObserver((mutations) => {
+        const button = document.querySelector('.ql-ai-generate');
+        if (button) {
+          button.setAttribute('data-content', 'AI生成');
+          // 找到按钮后停止观察
+          this.buttonObserver?.disconnect();
+          this.buttonObserver = null;
+        }
+      });
+      
+      // 开始观察DOM变化
+      this.buttonObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    }
+  }
+  
+  /**
+   * 设置按钮内容
+   */
+  private setButtonContent() {
     const button = document.querySelector('.ql-ai-generate');
     if (button) {
       button.setAttribute('data-content', 'AI生成');
-    } else {
-      // 如果按钮未找到，延迟100ms后重试
-      setTimeout(() => this.initGenerateButton(), 100);
+      return true;
     }
+    return false;
   }
 
   /**
