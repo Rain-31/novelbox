@@ -6,6 +6,7 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [vue()],
   base: './',
+  publicDir: 'public',
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
@@ -18,7 +19,9 @@ export default defineConfig({
       output: {
         manualChunks: {}
       }
-    }
+    },
+    assetsInlineLimit: 0,
+    copyPublicDir: true
   },
   optimizeDeps: {
     esbuildOptions: {

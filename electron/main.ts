@@ -294,7 +294,14 @@ function createMenu() {
           label: '使用帮助',
           click: async () => {
             // 打开帮助文档
-            const helpPath = path.join(app.getAppPath(), 'public', 'help', 'help.html');
+            // 在开发环境和打包环境中使用不同的路径
+            let helpPath;
+            if (process.env.NODE_ENV === 'development') {
+              helpPath = path.join(app.getAppPath(), 'public', 'help', 'help.html');
+            } else {
+              // 在打包环境中，使用extraResources路径
+              helpPath = path.join(process.resourcesPath, 'help', 'help.html');
+            }
             await shell.openPath(helpPath).catch(async (err) => {
               console.error('打开帮助文档失败:', err);
               // 如果直接打开失败，尝试用默认浏览器打开
