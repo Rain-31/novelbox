@@ -1,7 +1,7 @@
 {
   "name": "novel-box",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "NovelBox小说写作应用",
   "author": "novelbox.feedback@gmail.com",
   "license": "GPL-3.0",
