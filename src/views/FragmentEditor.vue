@@ -19,6 +19,20 @@
       <el-input v-model="fragment.content" type="textarea" placeholder="在此输入内容..." resize="none"
         class="content-textarea" />
     </div>
+    
+    <!-- 聊天输入区 -->
+    <div class="chat-input-area">
+      <div class="input-container">
+        <el-input v-model="chatInput" placeholder="与AI对话..." size="small" @keyup.enter="sendChatMessage" class="chat-input" />
+      </div>
+      <el-button class="send-button" circle type="primary" @click="sendChatMessage" :loading="isSending">
+        <!-- 简单发送箭头图标 -->
+        <svg class="custom-send-icon" viewBox="0 0 24 24" width="14" height="14">
+          <path d="M3,20 L21,12 L3,4 L3,9.5 L13,12 L3,14.5 Z"></path>
+        </svg>
+      </el-button>
+    </div>
+    
     <div class="editor-footer">
       <!-- 生成控制按钮 -->
       <template v-if="isGenerating">
@@ -74,6 +88,48 @@ const titleRef = ref<any>(null)
 const isGenerating = ref(false)
 // 片段是否曾经在生成（用于显示重新生成按钮）
 const wasGenerating = ref(false)
+
+// 聊天相关状态
+const chatInput = ref('')
+const isSending = ref(false)
+
+// 发送聊天消息
+const sendChatMessage = () => {
+  if (!chatInput.value.trim()) return
+  
+  const userInput = chatInput.value.trim()
+  chatInput.value = ''
+  
+  // 设置发送状态
+  isSending.value = true
+  
+  try {
+    // 发送消息到主进程
+    const message = {
+      type: 'chat-message',
+      fragmentId: fragment.value.id,
+      content: userInput
+    }
+    
+    // 发送到主窗口
+    window.electronAPI.sendToMainWindow(JSON.stringify(message))
+    
+    // 直接将用户输入追加到片段内容
+    fragment.value.content += '\n\n用户: ' + userInput
+    
+    // 模拟AI回复
+    setTimeout(() => {
+      const aiResponse = '我收到了您的消息: "' + userInput + '"。正在处理中...'
+      fragment.value.content += '\n\nAI: ' + aiResponse
+      isSending.value = false
+    }, 1000)
+    
+  } catch (error) {
+    console.error('发送消息失败:', error)
+    ElMessage.error('发送失败')
+    isSending.value = false
+  }
+}
 
 // 保存片段
 const saveFragment = async () => {
@@ -320,6 +376,22 @@ onMounted(async () => {
     fragment.value.updatedAt = new Date();
   });
 
+  // 注册聊天回复监听器
+  try {
+    const api = window.electronAPI as any;
+    if (typeof api.onChatResponse === 'function') {
+      api.onChatResponse((data: any) => {
+        if (data.fragmentId === fragment.value.id && data.content) {
+          // 将AI回复追加到内容中
+          fragment.value.content += '\n\nAI: ' + data.content;
+          isSending.value = false;
+        }
+      });
+    }
+  } catch (error) {
+    console.error('注册聊天响应监听器失败:', error);
+  }
+
   try {
     // 获取当前窗口ID并请求数据
     const result = await window.electronAPI.getCurrentWindowId();
@@ -357,6 +429,7 @@ onUnmounted(() => {
   position: relative;
   border-radius: 8px;
   /* 整体圆角 */
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1); /* 添加整体阴影 */
 }
 
 /* 实际内容容器，这个才是真正的圆角矩形 */
@@ -372,11 +445,8 @@ onUnmounted(() => {
   /* 顶部左侧圆角 */
   border-top-right-radius: 8px;
   /* 顶部右侧圆角 */
-  border-top: 1px solid rgba(230, 230, 230, 0.8);
-  border-left: 1px solid rgba(230, 230, 230, 0.8);
-  border-right: 1px solid rgba(230, 230, 230, 0.8);
-  box-shadow: none;
-  /* 移除重复的阴影 */
+  border: 1px solid rgba(230, 230, 230, 0.8);
+  border-bottom: none;
 }
 
 .window-title {
@@ -459,11 +529,86 @@ onUnmounted(() => {
   width: 100%;
   box-sizing: border-box;
   background-color: #f5f7fa;
-  /* 中间内容区域背景色 */
   border-left: 1px solid rgba(230, 230, 230, 0.8);
   border-right: 1px solid rgba(230, 230, 230, 0.8);
-  box-shadow: none;
-  /* 移除重复的阴影 */
+  border-bottom: none;
+  position: relative;
+}
+
+/* 聊天输入区域 */
+.chat-input-area {
+  padding: 8px;
+  background-color: #f5f7fa;
+  border-left: 1px solid rgba(230, 230, 230, 0.8);
+  border-right: 1px solid rgba(230, 230, 230, 0.8);
+  border-bottom: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.input-container {
+  flex: 1;
+  min-width: 0; /* 防止flex子项溢出 */
+}
+
+/* 聊天输入框样式 */
+.chat-input {
+  width: 100%;
+}
+
+:deep(.chat-input .el-input__wrapper) {
+  border-radius: 16px;
+  padding-left: 12px;
+  padding-right: 12px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px rgba(230, 230, 230, 0.8) inset !important; /* 统一边框颜色 */
+  height: 32px;
+  line-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.chat-input .el-input__inner) {
+  height: 32px;
+  line-height: 32px;
+  font-size: 14px;
+}
+
+:deep(.chat-input .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.3) inset !important;
+}
+
+:deep(.chat-input .el-input__wrapper:focus-within) {
+  box-shadow: 0 0 0 1px #409EFF inset !important;
+}
+
+/* 发送按钮样式 */
+.send-button {
+  transition: all 0.2s;
+  height: 32px;
+  width: 32px;
+  min-width: 32px; /* 防止按钮被压缩 */
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.send-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.5);
+}
+
+.custom-send-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  transform: rotate(-30deg);
+  margin-left: -1px;
+  margin-bottom: 2px;
 }
 
 /* 强制内容区填满窗口 */
@@ -482,7 +627,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  border: 1px solid #e6e6e6;
+  border: 1px solid rgba(230, 230, 230, 0.8); /* 统一边框颜色 */
   padding: 8px 12px;
   font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
   font-size: 14px;
@@ -516,25 +661,22 @@ onUnmounted(() => {
   gap: 10px;
   padding: 5px 0;
   background-color: #f5f7fa;
-  /* 底部区域背景色 */
   border-bottom-left-radius: 8px;
-  /* 底部左侧圆角 */
   border-bottom-right-radius: 8px;
-  /* 底部右侧圆角 */
-  border-top: 1px solid rgba(230, 230, 230, 0.5);
-  border-bottom: 1px solid rgba(230, 230, 230, 0.8);
-  border-left: 1px solid rgba(230, 230, 230, 0.8);
-  border-right: 1px solid rgba(230, 230, 230, 0.8);
-  box-shadow: none;
-  /* 移除重复的阴影 */
+  border: 1px solid rgba(230, 230, 230, 0.8);
+  border-top: none;
 }
 
 /* 移除通用的阴影样式，改用伪元素实现 */
 .window-drag-area,
 .editor-content,
-.editor-footer {
+.editor-footer,
+.chat-input-area {
   box-shadow: none;
+  background-color: #f5f7fa; /* 统一背景色 */
 }
+
+/* 使用统一的边框代替分隔线 */
 
 /* 添加样式修复透明窗口问题 */
 :root {
