@@ -16,23 +16,52 @@
     </div>
     <!-- 内容编辑区 -->
     <div class="editor-content">
-      <el-input v-model="fragment.content" type="textarea" placeholder="在此输入内容..." resize="none"
-        class="content-textarea" />
+      <div class="chat-container">
+        <div class="message-list" v-if="messages.length > 0" ref="messageListRef">
+          <div v-for="(message, index) in messages" :key="index"
+            :class="['message-item', message.role === 'user' ? 'user-message' : 'ai-message']">
+            <div class="message-avatar">
+              <div class="avatar-icon" :class="message.role">
+                <i class="el-icon" v-if="message.role === 'user'">
+                  <svg viewBox="0 0 1024 1024" width="16" height="16">
+                    <path fill="currentColor"
+                      d="M858.5 763.6c-18.9-44.8-46.1-85-80.6-119.5-34.5-34.5-74.7-61.6-119.5-80.6-0.4-0.2-0.8-0.3-1.2-0.5C719.5 518 760 444.7 760 362c0-137-111-248-248-248S264 225 264 362c0 82.7 40.5 156 102.8 201.1-0.4 0.2-0.8 0.3-1.2 0.5-44.8 18.9-85 46-119.5 80.6-34.5 34.5-61.6 74.7-80.6 119.5C146.9 807.5 137 854 136 901.8c-0.1 4.5 3.5 8.2 8 8.2h60c4.4 0 7.9-3.5 8-7.8 2-77.2 33-149.5 87.8-204.3 56.7-56.7 132-87.9 212.2-87.9s155.5 31.2 212.2 87.9C779 752.7 810 825 812 902.2c0.1 4.4 3.6 7.8 8 7.8h60c4.5 0 8.1-3.7 8-8.2-1-47.8-10.9-94.3-29.5-138.2z">
+                    </path>
+                  </svg>
+                </i>
+                <i class="el-icon" v-else>
+                  <svg viewBox="0 0 1024 1024" width="16" height="16">
+                    <path fill="currentColor"
+                      d="M288 512a224 224 0 1 0 448 0 224 224 0 1 0-448 0z m494.33 320L640.16 704.11A288 288 0 0 1 512 768c-69.09 0-136.15-24.1-189.57-68.11l-142.05 127.87A32 32 0 0 1 96 813.18V96a32 32 0 0 1 32-32h768a32 32 0 0 1 32 32v717.22a32 32 0 0 1-45.67 28.78z">
+                    </path>
+                  </svg>
+                </i>
+              </div>
+            </div>
+            <div class="message-content">
+              <div class="message-text">{{ message.content }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="empty-chat" v-else>
+          <div class="empty-message">暂无消息，开始与AI对话吧</div>
+        </div>
+      </div>
     </div>
-    
+
     <!-- 聊天输入区 -->
     <div class="chat-input-area">
       <div class="input-container">
-        <el-input v-model="chatInput" placeholder="与AI对话..." size="small" @keyup.enter="sendChatMessage" class="chat-input" />
+        <el-input v-model="chatInput" placeholder="与AI对话..." size="small" @keyup.enter="sendChatMessage"
+          class="chat-input" />
       </div>
       <el-button class="send-button" circle type="primary" @click="sendChatMessage" :loading="isSending">
-        <!-- 简单发送箭头图标 -->
         <svg class="custom-send-icon" viewBox="0 0 24 24" width="14" height="14">
           <path d="M3,20 L21,12 L3,4 L3,9.5 L13,12 L3,14.5 Z"></path>
         </svg>
       </el-button>
     </div>
-    
+
     <div class="editor-footer">
       <!-- 生成控制按钮 -->
       <template v-if="isGenerating">
@@ -51,8 +80,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+
+// 消息接口
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
+}
 
 // 简化的片段数据结构
 interface Fragment {
@@ -93,16 +129,102 @@ const wasGenerating = ref(false)
 const chatInput = ref('')
 const isSending = ref(false)
 
+// 聊天消息列表
+const messages = ref<ChatMessage[]>([])
+
+// 消息列表DOM引用
+const messageListRef = ref<HTMLElement | null>(null);
+
+// 解析内容为消息
+const parseContentToMessages = (content: string) => {
+  if (!content) return []
+
+  const lines = content.split('\n')
+  const parsedMessages: ChatMessage[] = []
+  let currentMessage: ChatMessage | null = null
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+
+    if (line.startsWith('用户:')) {
+      // 如果有正在处理的消息，先保存
+      if (currentMessage) {
+        parsedMessages.push(currentMessage)
+      }
+
+      // 创建新的用户消息
+      currentMessage = {
+        role: 'user',
+        content: line.substring(3).trim(),
+        timestamp: new Date()
+      }
+    } else if (line.startsWith('AI:')) {
+      // 如果有正在处理的消息，先保存
+      if (currentMessage) {
+        parsedMessages.push(currentMessage)
+      }
+
+      // 创建新的AI消息
+      currentMessage = {
+        role: 'assistant',
+        content: line.substring(3).trim(),
+        timestamp: new Date()
+      }
+    } else if (currentMessage && line) {
+      // 继续添加到当前消息
+      currentMessage.content += '\n' + line
+    } else if (line && !currentMessage) {
+      // 没有前缀的内容默认为AI消息
+      currentMessage = {
+        role: 'assistant',
+        content: line,
+        timestamp: new Date()
+      }
+    }
+  }
+
+  // 添加最后一条消息
+  if (currentMessage) {
+    parsedMessages.push(currentMessage)
+  }
+
+  return parsedMessages
+}
+
+// 监听片段内容变化，更新消息列表
+watch(() => fragment.value.content, (newContent) => {
+  messages.value = parseContentToMessages(newContent)
+}, { immediate: true })
+
+// 滚动到底部函数
+const scrollToBottom = () => {
+  nextTick(() => {
+    if (messageListRef.value) {
+      messageListRef.value.scrollTop = messageListRef.value.scrollHeight;
+    }
+  });
+};
+
+// 监听消息列表变化，自动滚动到底部
+watch(() => messages.value.length, () => {
+  scrollToBottom();
+});
+
+// 在消息内容变化时，也需要滚动到底部
+watch(() => messages.value.map(m => m.content), () => {
+  scrollToBottom();
+}, { deep: true });
+
 // 发送聊天消息
 const sendChatMessage = () => {
   if (!chatInput.value.trim()) return
-  
+
   const userInput = chatInput.value.trim()
   chatInput.value = ''
-  
+
   // 设置发送状态
   isSending.value = true
-  
+
   try {
     // 发送消息到主进程
     const message = {
@@ -110,20 +232,44 @@ const sendChatMessage = () => {
       fragmentId: fragment.value.id,
       content: userInput
     }
-    
+
     // 发送到主窗口
     window.electronAPI.sendToMainWindow(JSON.stringify(message))
-    
-    // 直接将用户输入追加到片段内容
-    fragment.value.content += '\n\n用户: ' + userInput
-    
+
+    // 添加用户消息到列表
+    messages.value.push({
+      role: 'user',
+      content: userInput,
+      timestamp: new Date()
+    })
+
+    // 更新片段内容以保持同步
+    fragment.value.content = messages.value.map(msg =>
+      `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+    ).join('\n\n')
+
+    // 滚动到底部
+    scrollToBottom();
+
     // 模拟AI回复
     setTimeout(() => {
       const aiResponse = '我收到了您的消息: "' + userInput + '"。正在处理中...'
-      fragment.value.content += '\n\nAI: ' + aiResponse
+
+      // 添加AI消息到列表
+      messages.value.push({
+        role: 'assistant',
+        content: aiResponse,
+        timestamp: new Date()
+      })
+
+      // 更新片段内容
+      fragment.value.content = messages.value.map(msg =>
+        `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+      ).join('\n\n')
+
       isSending.value = false
     }, 1000)
-    
+
   } catch (error) {
     console.error('发送消息失败:', error)
     ElMessage.error('发送失败')
@@ -347,6 +493,12 @@ onMounted(async () => {
     // 更新内容
     fragment.value.content = data.content || fragment.value.content;
 
+    // 解析内容为消息
+    messages.value = parseContentToMessages(fragment.value.content);
+
+    // 滚动到底部
+    scrollToBottom();
+
     // 更新标题
     if (data.title) {
       fragmentTitle.value = data.title;
@@ -382,9 +534,22 @@ onMounted(async () => {
     if (typeof api.onChatResponse === 'function') {
       api.onChatResponse((data: any) => {
         if (data.fragmentId === fragment.value.id && data.content) {
-          // 将AI回复追加到内容中
-          fragment.value.content += '\n\nAI: ' + data.content;
+          // 添加AI回复到消息列表
+          messages.value.push({
+            role: 'assistant',
+            content: data.content,
+            timestamp: new Date()
+          })
+
+          // 更新片段内容
+          fragment.value.content = messages.value.map(msg =>
+            `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+          ).join('\n\n')
+
           isSending.value = false;
+
+          // 滚动到底部
+          scrollToBottom();
         }
       });
     }
@@ -429,7 +594,8 @@ onUnmounted(() => {
   position: relative;
   border-radius: 8px;
   /* 整体圆角 */
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1); /* 添加整体阴影 */
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  /* 添加整体阴影 */
 }
 
 /* 实际内容容器，这个才是真正的圆角矩形 */
@@ -533,6 +699,8 @@ onUnmounted(() => {
   border-right: 1px solid rgba(230, 230, 230, 0.8);
   border-bottom: none;
   position: relative;
+  overflow: hidden;
+  /* 确保不出现双滚动条 */
 }
 
 /* 聊天输入区域 */
@@ -550,7 +718,8 @@ onUnmounted(() => {
 
 .input-container {
   flex: 1;
-  min-width: 0; /* 防止flex子项溢出 */
+  min-width: 0;
+  /* 防止flex子项溢出 */
 }
 
 /* 聊天输入框样式 */
@@ -563,7 +732,8 @@ onUnmounted(() => {
   padding-left: 12px;
   padding-right: 12px;
   background-color: #fff;
-  box-shadow: 0 0 0 1px rgba(230, 230, 230, 0.8) inset !important; /* 统一边框颜色 */
+  box-shadow: 0 0 0 1px rgba(230, 230, 230, 0.8) inset !important;
+  /* 统一边框颜色 */
   height: 32px;
   line-height: 32px;
   display: flex;
@@ -589,7 +759,8 @@ onUnmounted(() => {
   transition: all 0.2s;
   height: 32px;
   width: 32px;
-  min-width: 32px; /* 防止按钮被压缩 */
+  min-width: 32px;
+  /* 防止按钮被压缩 */
   padding: 0;
   display: flex;
   align-items: center;
@@ -611,60 +782,110 @@ onUnmounted(() => {
   margin-bottom: 2px;
 }
 
-/* 强制内容区填满窗口 */
-.content-textarea {
-  width: 100%;
-  height: 100%;
-}
-
-:deep(.el-textarea) {
+/* 聊天容器样式 */
+.chat-container {
   width: 100%;
   height: 100%;
   display: flex;
-}
-
-:deep(.el-textarea__inner) {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  border: 1px solid rgba(230, 230, 230, 0.8); /* 统一边框颜色 */
-  padding: 8px 12px;
-  font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.6;
+  flex-direction: column;
+  overflow: hidden;
+  /* 改为hidden，防止整体出现滚动条 */
   background-color: #fff;
-  resize: none;
-  flex: 1;
-  min-height: unset;
   border-radius: 4px;
-  /* 添加内部文本区域圆角 */
-}
-
-/* 去掉element-plus的默认样式 */
-:deep(.el-textarea .el-input__wrapper) {
-  box-shadow: none !important;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-}
-
-:deep(.el-input__wrapper) {
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  margin: 0;
-}
-
-.editor-footer {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  padding: 5px 0;
-  background-color: #f5f7fa;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
   border: 1px solid rgba(230, 230, 230, 0.8);
-  border-top: none;
+}
+
+.message-list {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+  /* 确保消息列表可以滚动 */
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  /* 确保不超出容器高度 */
+  scroll-behavior: smooth;
+  /* 平滑滚动 */
+}
+
+.message-item {
+  display: flex;
+  margin-bottom: 12px;
+  max-width: 100%;
+}
+
+.message-avatar {
+  width: 36px;
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.avatar-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  position: static;
+  /* 修改为static，让头像随消息一起滚动 */
+}
+
+.avatar-icon.user {
+  background-color: #409EFF;
+}
+
+.avatar-icon.assistant {
+  background-color: #67C23A;
+}
+
+.message-content {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+  /* 确保长词可以换行 */
+}
+
+.message-text {
+  padding: 8px 12px;
+  border-radius: 12px;
+  word-break: break-word;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  /* 确保长词可以换行 */
+}
+
+.user-message .message-text {
+  background-color: #E6F1FF;
+  color: #303133;
+  border-top-left-radius: 2px;
+}
+
+.ai-message .message-text {
+  background-color: #F2F6FC;
+  color: #303133;
+  border-top-right-radius: 2px;
+}
+
+.empty-chat {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-message {
+  color: #909399;
+  font-size: 14px;
+}
+
+/* 强制内容区填满窗口，覆盖原有的文本区域样式 */
+:deep(.el-textarea) {
+  display: none;
 }
 
 /* 移除通用的阴影样式，改用伪元素实现 */
@@ -673,10 +894,9 @@ onUnmounted(() => {
 .editor-footer,
 .chat-input-area {
   box-shadow: none;
-  background-color: #f5f7fa; /* 统一背景色 */
+  background-color: #f5f7fa;
+  /* 统一背景色 */
 }
-
-/* 使用统一的边框代替分隔线 */
 
 /* 添加样式修复透明窗口问题 */
 :root {
