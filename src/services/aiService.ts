@@ -19,6 +19,19 @@ interface StreamAIResponse {
   text?: string;
 }
 
+// 定义消息类型
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+// 为Anthropic定义兼容的消息类型
+type AnthropicMessageRole = 'user' | 'assistant';
+interface AnthropicMessage {
+  role: AnthropicMessageRole;
+  content: string;
+}
+
 class AIService {
   private config: ProviderConfig;
   private openaiClient?: OpenAI;
@@ -90,15 +103,18 @@ class AIService {
     };
   }
 
-  private async generateWithOpenAI(prompt: string, stream?: StreamCallback, signal?: AbortSignal): Promise<string> {
+  private async generateWithOpenAI(prompt: string, stream?: StreamCallback, signal?: AbortSignal, messages?: ChatMessage[]): Promise<string> {
     if (!this.openaiClient) throw new Error('AI client not initialized');
     
     const { temperature, maxTokens, topP } = this.getModelConfig();
+    
+    // 如果提供了messages，使用它们；否则创建单一用户消息
+    const chatMessages = messages || [{ role: 'user', content: prompt }];
 
     if (stream) {
       const response = await this.openaiClient.chat.completions.create({
         model: this.config.model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: chatMessages,
         temperature: temperature,
         max_tokens: maxTokens,
         top_p: topP,
@@ -129,7 +145,7 @@ class AIService {
     } else {
       const response = await this.openaiClient.chat.completions.create({
         model: this.config.model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: chatMessages,
         temperature: temperature,
         max_tokens: maxTokens,
         top_p: topP
@@ -138,15 +154,57 @@ class AIService {
     }
   }
 
-  private async generateWithAnthropic(prompt: string, stream?: StreamCallback, signal?: AbortSignal): Promise<string> {
+  private async generateWithAnthropic(prompt: string, stream?: StreamCallback, signal?: AbortSignal, messages?: ChatMessage[]): Promise<string> {
     if (!this.anthropicClient) throw new Error('Anthropic client not initialized');
 
     const { temperature, maxTokens, topP } = this.getModelConfig();
+    
+    // Anthropic只支持user和assistant角色，需要处理system消息
+    let processedMessages;
+    
+    if (messages) {
+      // 过滤出system消息
+      const systemMessages = messages.filter(msg => msg.role === 'system');
+      // 过滤出非system消息
+      const nonSystemMessages = messages.filter(msg => msg.role !== 'system');
+      
+      // 如果有system消息，将其内容添加到第一条user消息前面
+      if (systemMessages.length > 0) {
+        const systemContent = systemMessages.map(msg => msg.content).join('\n\n');
+        
+        // 找到第一条user消息
+        const firstUserIndex = nonSystemMessages.findIndex(msg => msg.role === 'user');
+        
+        if (firstUserIndex !== -1) {
+          // 将system内容添加到第一条user消息前
+          nonSystemMessages[firstUserIndex] = {
+            ...nonSystemMessages[firstUserIndex],
+            content: `${systemContent}\n\n${nonSystemMessages[firstUserIndex].content}`
+          };
+        } else {
+          // 如果没有user消息，创建一个
+          nonSystemMessages.unshift({
+            role: 'user',
+            content: systemContent
+          });
+        }
+      }
+      
+      // 转换为Anthropic兼容的消息格式
+      processedMessages = nonSystemMessages
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+        .map(msg => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content
+        }));
+    } else {
+      processedMessages = [{ role: 'user', content: prompt }];
+    }
 
     if (stream) {
       const response = this.anthropicClient.messages.stream({
         model: this.config.model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: processedMessages,
         temperature: temperature,
         max_tokens: maxTokens,
         top_p: topP
@@ -180,7 +238,7 @@ class AIService {
     } else {
       const response = await this.anthropicClient.messages.create({
         model: this.config.model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: processedMessages,
         temperature: temperature,
         max_tokens: maxTokens,
         top_p: topP
@@ -189,7 +247,7 @@ class AIService {
     }
   }
 
-  private async generateWithGemini(prompt: string, stream?: StreamCallback, signal?: AbortSignal): Promise<string> {
+  private async generateWithGemini(prompt: string, stream?: StreamCallback, signal?: AbortSignal, messages?: ChatMessage[]): Promise<string> {
     if (!this.geminiClient) throw new Error('Gemini client not initialized');
 
     const { temperature, maxTokens, topP } = this.getModelConfig();
@@ -203,47 +261,108 @@ class AIService {
       }
     });
 
-    if (stream) {
-      const response = await model.generateContentStream(prompt, { signal });
-      let fullText = '';
-      try {
-        for await (const chunk of response.stream) {
-          if (signal?.aborted) {
-            break;
+    try {
+      // 统一处理单轮和多轮对话
+      // 如果有messages参数，使用它；否则创建单个用户消息
+      const chatMessages = messages || [{ role: 'user', content: prompt }];
+      
+      // 将ChatMessage格式转换为Gemini的聊天格式
+      const geminiMessages = chatMessages.map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : msg.role,
+        parts: [{ text: msg.content }]
+      }));
+      
+      // 创建聊天会话
+      const chatSession = model.startChat({
+        history: geminiMessages.slice(0, -1) // 不包括最后一条消息
+      });
+      
+      // 获取最后一条消息
+      const lastMessage = chatMessages[chatMessages.length - 1];
+      
+      if (stream) {
+        const response = await chatSession.sendMessageStream(lastMessage.content, { signal });
+        let fullText = '';
+        try {
+          for await (const chunk of response.stream) {
+            if (signal?.aborted) {
+              break;
+            }
+            const content = chunk.text();
+            fullText += content;
+            stream(content);
           }
-          const content = chunk.text();
-          fullText += content;
-          stream(content);
+        } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            stream('', '已中止生成');
+            return fullText;
+          } else {
+            stream('', error instanceof Error ? error.message : 'Stream error');
+          }
+        } finally {
+          if (!signal?.aborted) {
+            stream('', undefined, true);
+          }
         }
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          stream('', '已中止生成');
-          return fullText;
-        } else {
-          stream('', error instanceof Error ? error.message : 'Stream error');
-        }
-      } finally {
-        if (!signal?.aborted) {
-          stream('', undefined, true);
-        }
+        return fullText;
+      } else {
+        const response = await chatSession.sendMessage(lastMessage.content);
+        return response.response.text();
       }
-      return fullText;
-    } else {
-      const response = await model.generateContent(prompt);
-      const result = await response.response;
-      return result.text();
+    } catch (error) {
+      console.error('Gemini API错误:', error);
+      
+      // 如果聊天模式失败，尝试使用基础生成模式作为备选方案
+      if (stream) {
+        const response = await model.generateContentStream(
+          messages ? messages[messages.length - 1].content : prompt, 
+          { signal }
+        );
+        let fullText = '';
+        try {
+          for await (const chunk of response.stream) {
+            if (signal?.aborted) {
+              break;
+            }
+            const content = chunk.text();
+            fullText += content;
+            stream(content);
+          }
+        } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            stream('', '已中止生成');
+            return fullText;
+          } else {
+            stream('', error instanceof Error ? error.message : 'Stream error');
+          }
+        } finally {
+          if (!signal?.aborted) {
+            stream('', undefined, true);
+          }
+        }
+        return fullText;
+      } else {
+        const response = await model.generateContent(
+          messages ? messages[messages.length - 1].content : prompt
+        );
+        const result = await response.response;
+        return result.text();
+      }
     }
   }
 
-  private async generateWithDeepseek(prompt: string, stream?: StreamCallback, signal?: AbortSignal): Promise<string> {
+  private async generateWithDeepseek(prompt: string, stream?: StreamCallback, signal?: AbortSignal, messages?: ChatMessage[]): Promise<string> {
     if (!this.deepseekClient) throw new Error('AI client not initialized');
 
     const { temperature, maxTokens, topP } = this.getModelConfig();
+    
+    // 如果提供了messages，使用它们；否则创建单一用户消息
+    const chatMessages = messages || [{ role: 'user', content: prompt }];
 
     if (stream) {
       const response = await this.deepseekClient.chat.completions.create({
         model: this.config.model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: chatMessages,
         temperature: temperature,
         max_tokens: maxTokens,
         top_p: topP,
@@ -274,7 +393,7 @@ class AIService {
     } else {
       const response = await this.deepseekClient.chat.completions.create({
         model: this.config.model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: chatMessages,
         temperature: temperature,
         max_tokens: maxTokens,
         top_p: topP
@@ -283,7 +402,7 @@ class AIService {
     }
   }
 
-  private async generateWithMiniMax(prompt: string, stream?: StreamCallback, signal?: AbortSignal): Promise<string> {
+  private async generateWithMiniMax(prompt: string, stream?: StreamCallback, signal?: AbortSignal, messages?: ChatMessage[]): Promise<string> {
     if (!this.minimaxApiKey) throw new Error('MiniMax API key not initialized');
     
     const { temperature, maxTokens, topP } = this.getModelConfig();
@@ -293,9 +412,12 @@ class AIService {
       'Authorization': `Bearer ${this.minimaxApiKey}`
     };
 
+    // 如果提供了messages，使用它们；否则创建单一用户消息
+    const chatMessages = messages || [{ role: 'user', content: prompt }];
+    
     const requestBody = {
       model: this.config.model,
-      messages: [{ role: 'user', content: prompt }],
+      messages: chatMessages,
       temperature: temperature,
       max_tokens: maxTokens,
       top_p: topP
@@ -429,7 +551,7 @@ class AIService {
     }
   }
 
-  private async generateWithCustomProvider(prompt: string, stream?: StreamCallback, signal?: AbortSignal): Promise<string> {
+  private async generateWithCustomProvider(prompt: string, stream?: StreamCallback, signal?: AbortSignal, messages?: ChatMessage[]): Promise<string> {
     const customProvider = this.config.customProviders?.find(p => p.name === this.config.provider);
     if (!customProvider) {
       throw new Error('自定义服务商配置未找到');
@@ -457,6 +579,9 @@ class AIService {
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
     }
 
+    // 如果提供了messages，使用它们；否则创建单一用户消息
+    const chatMessages = messages || [{ role: 'user', content: prompt }];
+
     if (stream) {
       try {
         const response = await fetch(baseURL, {
@@ -464,7 +589,7 @@ class AIService {
           headers,
           body: JSON.stringify({
             model: this.config.model,
-            messages: [{ role: 'user', content: prompt }],
+            messages: chatMessages,
             temperature: temperature,
             max_tokens: maxTokens,
             top_p: topP,
@@ -535,7 +660,7 @@ class AIService {
       try {
         const response = await axios.post(baseURL, {
           model: this.config.model,
-          messages: [{ role: 'user', content: prompt }],
+          messages: chatMessages,
           temperature: temperature,
           max_tokens: maxTokens,
           top_p: topP
