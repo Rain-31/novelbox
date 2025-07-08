@@ -661,6 +661,10 @@ ipcMain.handle('create-fragment-window', async (_event, fragment: any) => {
       // 移除vibrancy和roundedCorners，它们在Windows下兼容性不好
       resizable: false, // 禁止调整大小以保持圆角外观
     });
+
+    if (process.env.NODE_ENV === 'development') {
+      fragmentWindow.webContents.openDevTools({ mode: 'detach' });
+    }
     
     // 存储窗口引用
     fragmentWindows.set(fragment.id, fragmentWindow);

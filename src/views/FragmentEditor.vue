@@ -82,6 +82,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { convertChatMessagesToMultiTurn } from '../services/promptVariableService'
+import AIService from '../services/aiService'
+import { AIConfigService } from '../services/aiConfigService'
 
 // 消息接口
 interface ChatMessage {
@@ -134,6 +137,20 @@ const messages = ref<ChatMessage[]>([])
 
 // 消息列表DOM引用
 const messageListRef = ref<HTMLElement | null>(null);
+
+// AI服务实例
+const aiService = ref<any>(null);
+
+// 初始化AI服务
+const initAIService = async () => {
+  try {
+    const providerConfig = await AIConfigService.getCurrentProviderConfig();
+    aiService.value = new AIService(providerConfig);
+  } catch (error) {
+    console.error('初始化AI服务失败:', error);
+    ElMessage.error('AI服务初始化失败');
+  }
+};
 
 // 解析内容为消息
 const parseContentToMessages = (content: string) => {
@@ -216,7 +233,7 @@ watch(() => messages.value.map(m => m.content), () => {
 }, { deep: true });
 
 // 发送聊天消息
-const sendChatMessage = () => {
+const sendChatMessage = async () => {
   if (!chatInput.value.trim()) return
 
   const userInput = chatInput.value.trim()
@@ -226,22 +243,27 @@ const sendChatMessage = () => {
   isSending.value = true
 
   try {
-    // 发送消息到主进程
-    const message = {
-      type: 'chat-message',
-      fragmentId: fragment.value.id,
-      content: userInput
-    }
-
-    // 发送到主窗口
-    window.electronAPI.sendToMainWindow(JSON.stringify(message))
-
-    // 添加用户消息到列表
     messages.value.push({
       role: 'user',
       content: userInput,
       timestamp: new Date()
     })
+
+    let messagesForAI = messages.value.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+    
+    // 确保第一条消息是用户角色，这是Gemini API的要求
+    if (messagesForAI.length > 0 && messagesForAI[0].role === 'assistant') {
+      // 如果第一条是助手消息，添加一个空的用户消息在前面
+      messagesForAI.unshift({
+        role: 'user',
+        content: '请继续'
+      });
+    }
+    
+    const chatMessages = convertChatMessagesToMultiTurn(messagesForAI);
 
     // 更新片段内容以保持同步
     fragment.value.content = messages.value.map(msg =>
@@ -251,28 +273,74 @@ const sendChatMessage = () => {
     // 滚动到底部
     scrollToBottom();
 
-    // 模拟AI回复
-    setTimeout(() => {
-      const aiResponse = '我收到了您的消息: "' + userInput + '"。正在处理中...'
+    // 直接使用AI服务生成回复
+    if (!aiService.value) {
+      await initAIService();
+    }
 
-      // 添加AI消息到列表
-      messages.value.push({
-        role: 'assistant',
-        content: aiResponse,
-        timestamp: new Date()
-      })
+    if (aiService.value) {
+      // 使用流式响应处理AI回复
+      let aiResponse = '';
+      const streamCallback = (text: string, error?: string, complete?: boolean) => {
+        if (error) {
+          ElMessage.error(`AI回复错误: ${error}`);
+          isSending.value = false;
+          return;
+        }
+        
+        aiResponse += text;
+        
+        // 如果是第一个回复块，创建新的AI消息
+        if (aiResponse.length === text.length) {
+          messages.value.push({
+            role: 'assistant',
+            content: aiResponse,
+            timestamp: new Date()
+          });
+        } else {
+          // 更新最后一条消息的内容
+          const lastMessage = messages.value[messages.value.length - 1];
+          if (lastMessage && lastMessage.role === 'assistant') {
+            lastMessage.content = aiResponse;
+          }
+        }
+        
+        // 更新片段内容
+        fragment.value.content = messages.value.map(msg =>
+          `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+        ).join('\n\n');
+        
+        // 滚动到底部
+        scrollToBottom();
+        
+        // 如果完成，结束发送状态
+        if (complete) {
+          isSending.value = false;
+        }
+      };
+      
+      // 调用AI服务生成回复
+      aiService.value.generateText(chatMessages, streamCallback);
+    } else {
+      // 如果AI服务初始化失败，使用原来的方式发送到主窗口
+      const message = {
+        type: 'chat-message',
+        fragmentId: fragment.value.id,
+        content: userInput,
+        messages: chatMessages // 添加完整的消息历史
+      }
 
-      // 更新片段内容
-      fragment.value.content = messages.value.map(msg =>
-        `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
-      ).join('\n\n')
-
-      isSending.value = false
-    }, 1000)
-
+      // 发送到主窗口
+      window.electronAPI.sendToMainWindow(JSON.stringify(message))
+      
+      // 模拟AI回复
+      setTimeout(() => {
+        isSending.value = false
+      }, 1000)
+    }
   } catch (error) {
     console.error('发送消息失败:', error)
-    ElMessage.error('发送失败')
+    ElMessage.error('发送失败' + error)
     isSending.value = false
   }
 }
@@ -450,6 +518,9 @@ const replaceInEditor = () => {
 
 // 初始化
 onMounted(async () => {
+  // 初始化AI服务
+  await initAIService();
+  
   // 先设置数据接收监听器
   const dataHandler = (data: any) => {
     // 创建片段对象
@@ -476,6 +547,13 @@ onMounted(async () => {
     } else {
       // 从片段栏直接创建的新片段，不应该显示重新生成按钮
       wasGenerating.value = false;
+    }
+
+    // 初始化消息数组 - 解析内容为消息
+    if (data.content) {
+      messages.value = parseContentToMessages(data.content);
+    } else {
+      messages.value = []; // 确保消息数组为空数组而非undefined
     }
   };
 

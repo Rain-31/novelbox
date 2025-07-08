@@ -105,9 +105,9 @@ class AIService {
 
   private async generateWithOpenAI(prompt: string, stream?: StreamCallback, signal?: AbortSignal, messages?: ChatMessage[]): Promise<string> {
     if (!this.openaiClient) throw new Error('AI client not initialized');
-    
+
     const { temperature, maxTokens, topP } = this.getModelConfig();
-    
+
     // 如果提供了messages，使用它们；否则创建单一用户消息
     const chatMessages = messages || [{ role: 'user', content: prompt }];
 
@@ -158,23 +158,23 @@ class AIService {
     if (!this.anthropicClient) throw new Error('Anthropic client not initialized');
 
     const { temperature, maxTokens, topP } = this.getModelConfig();
-    
+
     // Anthropic只支持user和assistant角色，需要处理system消息
     let processedMessages;
-    
+
     if (messages) {
       // 过滤出system消息
       const systemMessages = messages.filter(msg => msg.role === 'system');
       // 过滤出非system消息
       const nonSystemMessages = messages.filter(msg => msg.role !== 'system');
-      
+
       // 如果有system消息，将其内容添加到第一条user消息前面
       if (systemMessages.length > 0) {
         const systemContent = systemMessages.map(msg => msg.content).join('\n\n');
-        
+
         // 找到第一条user消息
         const firstUserIndex = nonSystemMessages.findIndex(msg => msg.role === 'user');
-        
+
         if (firstUserIndex !== -1) {
           // 将system内容添加到第一条user消息前
           nonSystemMessages[firstUserIndex] = {
@@ -189,7 +189,7 @@ class AIService {
           });
         }
       }
-      
+
       // 转换为Anthropic兼容的消息格式
       processedMessages = nonSystemMessages
         .filter(msg => msg.role === 'user' || msg.role === 'assistant')
@@ -252,7 +252,7 @@ class AIService {
 
     const { temperature, maxTokens, topP } = this.getModelConfig();
 
-    const model = this.geminiClient.getGenerativeModel({ 
+    const model = this.geminiClient.getGenerativeModel({
       model: this.config.model,
       generationConfig: {
         temperature: temperature,
@@ -265,21 +265,78 @@ class AIService {
       // 统一处理单轮和多轮对话
       // 如果有messages参数，使用它；否则创建单个用户消息
       const chatMessages = messages || [{ role: 'user', content: prompt }];
-      
+
+      // 处理系统消息
+      // 提取系统消息
+      const systemMessages = chatMessages.filter(msg => msg.role === 'system');
+      // 过滤出非系统消息
+      const nonSystemMessages = chatMessages.filter(msg => msg.role !== 'system');
+
+      // 系统指令内容
+      let systemInstruction = '';
+      if (systemMessages.length > 0) {
+        systemInstruction = systemMessages.map(msg => msg.content).join('\n\n');
+      }
+
       // 将ChatMessage格式转换为Gemini的聊天格式
-      const geminiMessages = chatMessages.map(msg => ({
-        role: msg.role === 'assistant' ? 'model' : msg.role,
-        parts: [{ text: msg.content }]
-      }));
-      
-      // 创建聊天会话
-      const chatSession = model.startChat({
-        history: geminiMessages.slice(0, -1) // 不包括最后一条消息
+      // Gemini API使用'user'和'model'作为角色，而不是'user'和'assistant'
+      const geminiMessages = nonSystemMessages.map(msg => {
+        // 创建适用于Gemini API的角色
+        const geminiRole = msg.role === 'assistant' ? 'model' : 'user';
+
+        return {
+          role: geminiRole as any, // 使用类型断言解决类型不匹配问题
+          parts: [{ text: msg.content }]
+        };
       });
+
+      // 创建聊天会话
+      let history = geminiMessages.slice(0, -1); // 不包括最后一条消息
       
+      // 确保历史记录中的第一条消息是用户角色
+      if (history.length > 0 && history[0].role !== 'user') {
+        // 如果第一条是模型消息，需要调整顺序或添加一个用户消息
+        console.log('调整聊天历史：第一条消息必须是用户角色');
+        
+        // 方法1：如果只有一条模型消息，则不使用历史
+        if (history.length === 1) {
+          history = [];
+        } 
+        // 方法2：如果有多条消息，尝试重新排序，确保用户消息在前
+        else {
+          const userMessages = history.filter(msg => msg.role === 'user');
+          const modelMessages = history.filter(msg => msg.role === 'model');
+          
+          if (userMessages.length > 0) {
+            // 重新排序，确保用户消息在前
+            history = [];
+            for (let i = 0; i < Math.max(userMessages.length, modelMessages.length); i++) {
+              if (i < userMessages.length) history.push(userMessages[i]);
+              if (i < modelMessages.length) history.push(modelMessages[i]);
+            }
+          } else {
+            // 如果没有用户消息，则不使用历史
+            history = [];
+          }
+        }
+      }
+      
+      const chatOptions: any = {
+        history: history
+      };
+
+      // 如果有系统指令，添加到聊天选项中
+      if (systemInstruction) {
+        chatOptions.systemInstruction = systemInstruction;
+      }
+
+      const chatSession = model.startChat(chatOptions);
+
       // 获取最后一条消息
-      const lastMessage = chatMessages[chatMessages.length - 1];
-      
+      const lastMessage = nonSystemMessages.length > 0
+        ? nonSystemMessages[nonSystemMessages.length - 1]
+        : { role: 'user', content: prompt };
+
       if (stream) {
         const response = await chatSession.sendMessageStream(lastMessage.content, { signal });
         let fullText = '';
@@ -311,51 +368,26 @@ class AIService {
       }
     } catch (error) {
       console.error('Gemini API错误:', error);
-      
-      // 如果聊天模式失败，尝试使用基础生成模式作为备选方案
-      if (stream) {
-        const response = await model.generateContentStream(
-          messages ? messages[messages.length - 1].content : prompt, 
-          { signal }
-        );
-        let fullText = '';
-        try {
-          for await (const chunk of response.stream) {
-            if (signal?.aborted) {
-              break;
-            }
-            const content = chunk.text();
-            fullText += content;
-            stream(content);
-          }
-        } catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') {
-            stream('', '已中止生成');
-            return fullText;
-          } else {
-            stream('', error instanceof Error ? error.message : 'Stream error');
-          }
-        } finally {
-          if (!signal?.aborted) {
-            stream('', undefined, true);
-          }
-        }
-        return fullText;
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        stream('', '已中止生成');
+        return '';
       } else {
-        const response = await model.generateContent(
-          messages ? messages[messages.length - 1].content : prompt
-        );
-        const result = await response.response;
-        return result.text();
+        stream('', error instanceof Error ? error.message : 'Stream error');
+      }
+    } finally {
+      if (!signal?.aborted) {
+        stream('', undefined, true);
       }
     }
+    return '';
   }
 
   private async generateWithDeepseek(prompt: string, stream?: StreamCallback, signal?: AbortSignal, messages?: ChatMessage[]): Promise<string> {
     if (!this.deepseekClient) throw new Error('AI client not initialized');
 
     const { temperature, maxTokens, topP } = this.getModelConfig();
-    
+
     // 如果提供了messages，使用它们；否则创建单一用户消息
     const chatMessages = messages || [{ role: 'user', content: prompt }];
 
@@ -404,7 +436,7 @@ class AIService {
 
   private async generateWithMiniMax(prompt: string, stream?: StreamCallback, signal?: AbortSignal, messages?: ChatMessage[]): Promise<string> {
     if (!this.minimaxApiKey) throw new Error('MiniMax API key not initialized');
-    
+
     const { temperature, maxTokens, topP } = this.getModelConfig();
     const baseURL = `${this.minimaxBaseUrl}/chat/completions`;
     const headers = {
@@ -414,7 +446,7 @@ class AIService {
 
     // 如果提供了messages，使用它们；否则创建单一用户消息
     const chatMessages = messages || [{ role: 'user', content: prompt }];
-    
+
     const requestBody = {
       model: this.config.model,
       messages: chatMessages,
@@ -438,7 +470,7 @@ class AIService {
         if (!response.ok) {
           const errorText = await response.text();
           let errorMessage = `HTTP错误! 状态码: ${response.status}`;
-          
+
           try {
             const errorJson = JSON.parse(errorText);
             if (errorJson.base_resp?.status_msg) {
@@ -451,7 +483,7 @@ class AIService {
           } catch {
             errorMessage += ` - ${errorText}`;
           }
-          
+
           throw new Error(errorMessage);
         }
 
@@ -481,7 +513,7 @@ class AIService {
                 if (parsed.base_resp && parsed.base_resp.status_code !== 0) {
                   throw new Error(`MiniMax错误: ${parsed.base_resp.status_msg || parsed.base_resp.status_code}`);
                 }
-                
+
                 const content = parsed.choices?.[0]?.delta?.content || '';
                 fullText += content;
                 stream(content);
@@ -563,18 +595,18 @@ class AIService {
     const domain = customProvider.apiDomain.startsWith('http://') || customProvider.apiDomain.startsWith('https://')
       ? customProvider.apiDomain
       : `https://${customProvider.apiDomain}`;
-    
+
     // 处理API路径
-    const path = customProvider.apiPath.startsWith('/') 
-      ? customProvider.apiPath 
+    const path = customProvider.apiPath.startsWith('/')
+      ? customProvider.apiPath
       : `/${customProvider.apiPath}`;
-    
+
     const baseURL = `${domain}${path}`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
     };
-    
+
     if (this.config.apiKey) {
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
     }
@@ -601,7 +633,7 @@ class AIService {
         if (!response.ok) {
           const errorText = await response.text();
           let errorMessage = `HTTP错误! 状态码: ${response.status}`;
-          
+
           try {
             const errorJson = JSON.parse(errorText);
             if (errorJson.error?.message) {
@@ -612,7 +644,7 @@ class AIService {
           } catch {
             errorMessage += ` - ${errorText}`;
           }
-          
+
           throw new Error(errorMessage);
         }
 
@@ -688,9 +720,14 @@ class AIService {
     }
   }
 
-  async generateText(prompt: string, stream?: StreamCallback): Promise<AIResponse | StreamAIResponse> {
+  async generateText(promptOrMessages: string | ChatMessage[], stream?: StreamCallback): Promise<AIResponse | StreamAIResponse> {
     const abortController = new AbortController();
     let aborted = false;
+    
+    // 判断是字符串还是消息数组
+    const isMessagesArray = Array.isArray(promptOrMessages);
+    const prompt = isMessagesArray ? '' : promptOrMessages;
+    const messages = isMessagesArray ? promptOrMessages : undefined;
 
     try {
       if (stream) {
@@ -701,38 +738,38 @@ class AIService {
                 await this.generateWithOpenAI(prompt, (text, error) => {
                   if (aborted) return;
                   stream(text, error);
-                }, abortController.signal);
+                }, abortController.signal, messages);
                 break;
               case 'anthropic':
                 await this.generateWithAnthropic(prompt, (text, error) => {
                   if (aborted) return;
                   stream(text, error);
-                }, abortController.signal);
+                }, abortController.signal, messages);
                 break;
               case 'gemini':
                 await this.generateWithGemini(prompt, (text, error) => {
                   if (aborted) return;
                   stream(text, error);
-                }, abortController.signal);
+                }, abortController.signal, messages);
                 break;
               case 'deepseek':
                 await this.generateWithDeepseek(prompt, (text, error) => {
                   if (aborted) return;
                   stream(text, error);
-                }, abortController.signal);
+                }, abortController.signal, messages);
                 break;
               case 'minimax':
                 await this.generateWithMiniMax(prompt, (text, error) => {
                   if (aborted) return;
                   stream(text, error);
-                }, abortController.signal);
+                }, abortController.signal, messages);
                 break;
               default:
                 // 使用自定义服务商
                 await this.generateWithCustomProvider(prompt, (text, error) => {
                   if (aborted) return;
                   stream(text, error);
-                }, abortController.signal);
+                }, abortController.signal, messages);
             }
             stream('', undefined, true);
           } catch (error) {
@@ -753,22 +790,22 @@ class AIService {
       let text: string;
       switch (this.config.provider) {
         case 'openai':
-          text = await this.generateWithOpenAI(prompt);
+          text = await this.generateWithOpenAI(prompt, undefined, undefined, messages);
           break;
         case 'anthropic':
-          text = await this.generateWithAnthropic(prompt);
+          text = await this.generateWithAnthropic(prompt, undefined, undefined, messages);
           break;
         case 'gemini':
-          text = await this.generateWithGemini(prompt);
+          text = await this.generateWithGemini(prompt, undefined, undefined, messages);
           break;
         case 'deepseek':
-          text = await this.generateWithDeepseek(prompt);
+          text = await this.generateWithDeepseek(prompt, undefined, undefined, messages);
           break;
         case 'minimax':
-          text = await this.generateWithMiniMax(prompt);
+          text = await this.generateWithMiniMax(prompt, undefined, undefined, messages);
           break;
         default:
-          text = await this.generateWithCustomProvider(prompt);
+          text = await this.generateWithCustomProvider(prompt, undefined, undefined, messages);
       }
 
       console.log('生成的文本:', text);
@@ -780,7 +817,7 @@ class AIService {
       return { text };
     } catch (error) {
       console.error('AI生成失败:', error);
-      
+
       let errorMessage = '生成失败';
       if (error instanceof AxiosError && error.response?.data?.error?.message) {
         errorMessage = `API错误: ${error.response.data.error.message}`;

@@ -259,3 +259,19 @@ export const replaceFirstChapterPromptVariables = async (book: Book, currentChap
         .replace('${outline}', book.plot || '')
         .replace('${chapterOutline}', currentChapter.detailOutline.detailContent || '');
 }
+
+/**
+ * 将聊天消息转换为多轮对话格式
+ * @param messages 聊天消息数组
+ * @returns 转换后的多轮对话消息数组
+ */
+export const convertChatMessagesToMultiTurn = (messages: any[]): { role: 'user' | 'assistant' | 'system'; content: string }[] => {
+    if (!messages || messages.length === 0) {
+        return [];
+    }
+
+    return messages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+    }));
+}
