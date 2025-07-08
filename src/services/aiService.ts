@@ -406,8 +406,10 @@ class AIService {
         for await (const chunk of response) {
           if (signal?.aborted) break;
           const content = chunk.choices[0]?.delta?.content || '';
-          fullText += content;
-          stream(content);
+          if (content) {
+            fullText += content;
+            stream(content);
+          }
         }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
