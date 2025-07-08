@@ -500,6 +500,16 @@ const updateModelOptions = async () => {
     try {
       const providerConfig = await AIConfigService.loadProviderConfig(aiConfig.provider)
       
+      // 更新API密钥
+      if (providerConfig.apiKey !== undefined) {
+        aiConfig.apiKey = providerConfig.apiKey
+      }
+      
+      // 更新代理URL
+      if (providerConfig.proxyUrl !== undefined) {
+        aiConfig.proxyUrl = providerConfig.proxyUrl
+      }
+      
       // 检查是否有针对当前模型的保存配置
       const modelConfig = providerConfig.modelConfigs?.[aiConfig.model]
       
@@ -546,6 +556,19 @@ const updateModelOptions = async () => {
         id: foundCustomProvider.model,
         name: foundCustomProvider.model
       }]
+      
+      // 加载自定义服务商配置
+      try {
+        const providerConfig = await AIConfigService.loadProviderConfig(aiConfig.provider)
+        if (providerConfig.apiKey !== undefined) {
+          aiConfig.apiKey = providerConfig.apiKey
+        }
+        if (providerConfig.proxyUrl !== undefined) {
+          aiConfig.proxyUrl = providerConfig.proxyUrl
+        }
+      } catch (error) {
+        console.error("加载自定义服务商配置失败:", error)
+      }
     } else {
       modelOptions.value = []
     }
@@ -561,6 +584,11 @@ watch(() => aiConfig.model, async (newModel) => {
     // 加载当前服务商配置
     try {
       const providerConfig = await AIConfigService.loadProviderConfig(aiConfig.provider)
+      
+      // 更新API密钥
+      if (providerConfig.apiKey) {
+        aiConfig.apiKey = providerConfig.apiKey
+      }
       
       // 检查是否有针对当前模型的保存配置
       const modelConfig = providerConfig.modelConfigs?.[newModel]
