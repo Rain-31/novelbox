@@ -515,8 +515,10 @@ class AIService {
                 }
 
                 const content = parsed.choices?.[0]?.delta?.content || '';
-                fullText += content;
-                stream(content);
+                if (content) {
+                  fullText += content;
+                  stream(content);
+                }
               } catch (e) {
                 console.error('解析响应数据失败:', e);
                 if (e instanceof Error) {
