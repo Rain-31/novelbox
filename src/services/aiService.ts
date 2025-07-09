@@ -126,8 +126,10 @@ class AIService {
         for await (const chunk of response) {
           if (signal?.aborted) break;
           const content = chunk.choices[0]?.delta?.content || '';
-          fullText += content;
-          stream(content);
+          if (content) {
+            fullText += content;
+            stream(content);
+          }
         }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
@@ -217,8 +219,10 @@ class AIService {
             response.controller.abort();
             return;
           }
-          fullText += text;
-          stream(text);
+          if (text) {
+            fullText += text;
+            stream(text);
+          }
         });
 
         await response.finalMessage();
@@ -292,21 +296,21 @@ class AIService {
 
       // 创建聊天会话
       let history = geminiMessages.slice(0, -1); // 不包括最后一条消息
-      
+
       // 确保历史记录中的第一条消息是用户角色
       if (history.length > 0 && history[0].role !== 'user') {
         // 如果第一条是模型消息，需要调整顺序或添加一个用户消息
         console.log('调整聊天历史：第一条消息必须是用户角色');
-        
+
         // 方法1：如果只有一条模型消息，则不使用历史
         if (history.length === 1) {
           history = [];
-        } 
+        }
         // 方法2：如果有多条消息，尝试重新排序，确保用户消息在前
         else {
           const userMessages = history.filter(msg => msg.role === 'user');
           const modelMessages = history.filter(msg => msg.role === 'model');
-          
+
           if (userMessages.length > 0) {
             // 重新排序，确保用户消息在前
             history = [];
@@ -320,7 +324,7 @@ class AIService {
           }
         }
       }
-      
+
       const chatOptions: any = {
         history: history
       };
@@ -727,7 +731,7 @@ class AIService {
   async generateText(promptOrMessages: string | ChatMessage[], stream?: StreamCallback): Promise<AIResponse | StreamAIResponse> {
     const abortController = new AbortController();
     let aborted = false;
-    
+
     // 判断是字符串还是消息数组
     const isMessagesArray = Array.isArray(promptOrMessages);
     const prompt = isMessagesArray ? '' : promptOrMessages;
