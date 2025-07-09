@@ -379,8 +379,12 @@ const saveFragment = async () => {
 
 // 关闭窗口
 const closeWindow = () => {
-
   try {
+    // 如果当前正在生成内容，先停止生成
+    if (isGenerating.value) {
+      stopGeneration();
+    }
+
     if (fragment.value.id) {
       window.electronAPI.closeFragmentWindow(fragment.value.id);
     } else {
