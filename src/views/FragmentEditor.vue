@@ -40,6 +40,28 @@
             </div>
             <div class="message-content">
               <div class="message-text">{{ message.content }}</div>
+              <div class="message-actions">
+                <button class="action-btn" @click="regenerateMessage(index)" v-if="message.role === 'assistant'" title="重新生成">
+                  <svg viewBox="0 0 1024 1024" width="14" height="14">
+                    <path fill="currentColor" d="M909.1 209.3l-56.4 44.1C775.8 155.1 656.2 92 521.9 92 290 92 102.3 279.5 102 511.5 101.7 743.7 289.8 932 521.9 932c181.3 0 335.8-115 394.6-276.1 1.5-4.2-0.7-8.9-4.9-10.3l-56.7-19.5c-4.1-1.4-8.6 0.7-10.1 4.8-1.8 5-3.8 10-5.9 14.9-17.3 41-42.1 77.8-73.7 109.4-31.6 31.6-68.4 56.4-109.3 73.8-42.3 17.9-87.4 27-133.8 27-46.5 0-91.5-9.1-133.8-27-40.9-17.3-77.7-42.1-109.3-73.8-31.6-31.6-56.4-68.4-73.7-109.4-17.9-42.4-27-87.4-27-133.9s9.1-91.5 27-133.9c17.3-41 42.1-77.8 73.7-109.4 31.6-31.6 68.4-56.4 109.3-73.8 42.3-17.9 87.4-27 133.8-27 46.5 0 91.5 9.1 133.8 27 40.9 17.3 77.7 42.1 109.3 73.8 9.9 9.9 19.2 20.4 27.8 31.4l-60.2 47c-5.3 4.1-3.5 12.5 3 14.1l175.6 43c5 1.2 9.9-2.6 9.9-7.7l0.8-180.9c-0.1-6.6-7.8-10.3-13-6.2z"></path>
+                  </svg>
+                </button>
+                <button class="action-btn" @click="editMessage(index)" title="编辑">
+                  <svg viewBox="0 0 1024 1024" width="14" height="14">
+                    <path fill="currentColor" d="M880 836H144c-17.7 0-32 14.3-32 32v36c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-36c0-17.7-14.3-32-32-32zm-622.3-84c2 0 4-.2 6-.5L431.9 722c2-.4 3.9-1.3 5.3-2.8l423.9-423.9c3.9-3.9 3.9-10.2 0-14.1L694.9 114.9c-1.9-1.9-4.4-2.9-7.1-2.9s-5.2 1-7.1 2.9L256.8 538.8c-1.5 1.5-2.4 3.3-2.8 5.3l-29.5 168.2c-1.9 11.1 1.5 21.9 9.4 29.8 6.6 6.4 14.9 9.9 23.8 9.9z"></path>
+                  </svg>
+                </button>
+                <button class="action-btn" @click="copyMessage(message.content)" title="复制">
+                  <svg viewBox="0 0 1024 1024" width="14" height="14">
+                    <path fill="currentColor" d="M832 64H296c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h496v688c0 4.4 3.6 8 8 8h56c4.4 0 8-3.6 8-8V96c0-17.7-14.3-32-32-32zM704 192H192c-17.7 0-32 14.3-32 32v530.7c0 8.5 3.4 16.6 9.4 22.6l173.3 173.3c2.2 2.2 4.7 4 7.4 5.5v1.9h4.2c3.5 1.3 7.2 2 11 2H704c17.7 0 32-14.3 32-32V224c0-17.7-14.3-32-32-32zM350 856.2L263.9 770H350v86.2zM664 888H414V746c0-22.1-17.9-40-40-40H232V264h432v624z"></path>
+                  </svg>
+                </button>
+                <button class="action-btn" @click="deleteMessage(index)" title="删除">
+                  <svg viewBox="0 0 1024 1024" width="14" height="14">
+                    <path fill="currentColor" d="M360 184h-8c4.4 0 8-3.6 8-8v8h304v-8c0 4.4 3.6 8 8 8h-8v72h72v-80c0-35.3-28.7-64-64-64H352c-35.3 0-64 28.7-64 64v80h72v-72zm504 72H160c-17.7 0-32 14.3-32 32v32c0 4.4 3.6 8 8 8h60.4l24.7 523c1.6 34.1 29.8 61 63.9 61h454c34.2 0 62.3-26.8 63.9-61l24.7-523H888c4.4 0 8-3.6 8-8v-32c0-17.7-14.3-32-32-32zM731.3 840H292.7l-24.2-512h487l-24.2 512z"></path>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -91,6 +113,7 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  isEditing?: boolean
 }
 
 // 简化的片段数据结构
@@ -520,6 +543,26 @@ const replaceInEditor = () => {
   }
 }
 
+// 编辑消息
+const editMessage = (index: number) => {
+
+}
+
+// 复制消息内容
+const copyMessage = (content: string) => {
+
+}
+
+// 删除消息
+const deleteMessage = (index: number) => {
+
+}
+
+// 重新生成消息
+const regenerateMessage = (index: number) => {
+
+}
+
 // 初始化
 onMounted(async () => {
   // 初始化AI服务
@@ -927,6 +970,7 @@ onUnmounted(() => {
   min-width: 0;
   overflow-wrap: break-word;
   /* 确保长词可以换行 */
+  position: relative;
 }
 
 .message-text {
@@ -939,6 +983,50 @@ onUnmounted(() => {
   max-width: 100%;
   overflow-wrap: break-word;
   /* 确保长词可以换行 */
+}
+
+/* 添加消息操作按钮样式 */
+.message-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  margin-left: 12px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.message-item:hover .message-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  padding: 0;
+  color: #909399;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background-color: rgba(144, 147, 153, 0.1);
+  color: #606266;
+}
+
+.user-message .action-btn:hover {
+  background-color: rgba(64, 158, 255, 0.1);
+  color: #409EFF;
+}
+
+.ai-message .action-btn:hover {
+  background-color: rgba(103, 194, 58, 0.1);
+  color: #67C23A;
 }
 
 .user-message .message-text {
