@@ -550,7 +550,23 @@ const editMessage = (index: number) => {
 
 // 复制消息内容
 const copyMessage = (content: string) => {
-
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(content).then(() => {
+      ElMessage.success('内容已复制');
+    }).catch(err => {
+      console.error('复制失败:', err);
+      ElMessage.error('复制失败');
+    });
+  } else {
+    // Fallback for browsers that don't support clipboard API
+    const textArea = document.createElement('textarea');
+    textArea.value = content;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+    ElMessage.success('内容已复制');
+  }
 }
 
 // 删除消息
