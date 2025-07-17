@@ -39,7 +39,24 @@
               </div>
             </div>
             <div class="message-content">
-              <div class="message-text">{{ message.content }}</div>
+              <!-- 显示模式 -->
+              <div v-if="!message.isEditing" class="message-text">{{ message.content }}</div>
+              <!-- 编辑模式 -->
+              <div v-if="message.isEditing" class="message-edit">
+                <textarea
+                  v-model="message.editingContent"
+                  class="edit-textarea"
+                  rows="5"
+                  placeholder="编辑消息内容..."
+                  @keydown.ctrl.enter.prevent="saveMessageEdit(index)"
+                  @keydown.esc.prevent="cancelMessageEdit(index)"
+                  ref="editTextarea"
+                ></textarea>
+                <div class="edit-actions">
+                  <el-button size="small" type="primary" @click="saveMessageEdit(index)">确定</el-button>
+                  <el-button size="small" @click="cancelMessageEdit(index)">取消</el-button>
+                </div>
+              </div>
               <div class="message-actions">
                 <button class="action-btn" @click="regenerateMessage(index)" v-if="message.role === 'assistant'" title="重新生成">
                   <svg viewBox="0 0 1024 1024" width="14" height="14">
@@ -102,8 +119,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { convertChatMessagesToMultiTurn } from '../services/promptVariableService'
 import AIService from '../services/aiService'
 import { AIConfigService } from '../services/aiConfigService'
@@ -114,6 +131,7 @@ interface ChatMessage {
   content: string
   timestamp: Date
   isEditing?: boolean
+  editingContent?: string
 }
 
 // 简化的片段数据结构
@@ -545,7 +563,77 @@ const replaceInEditor = () => {
 
 // 编辑消息
 const editMessage = (index: number) => {
+  if (index >= 0 && index < messages.value.length) {
+    // 创建新的消息数组，确保响应式更新
+    const newMessages = [...messages.value]
+    const message = newMessages[index]
 
+    // 设置编辑状态
+    message.isEditing = true
+    message.editingContent = message.content
+
+    // 更新消息数组
+    messages.value = newMessages
+
+    // 等待DOM更新后聚焦到编辑框
+    nextTick(() => {
+      // 查找当前消息的编辑框
+      const messageItems = document.querySelectorAll('.message-item')
+      if (messageItems[index]) {
+        const editTextarea = messageItems[index].querySelector('.edit-textarea') as HTMLTextAreaElement
+        if (editTextarea) {
+          editTextarea.focus()
+          // 将光标移到文本末尾
+          setTimeout(() => {
+            editTextarea.setSelectionRange(editTextarea.value.length, editTextarea.value.length)
+          }, 100)
+        }
+      }
+    })
+  }
+}
+
+// 保存消息编辑
+const saveMessageEdit = (index: number) => {
+  if (index >= 0 && index < messages.value.length) {
+    const newMessages = [...messages.value]
+    const message = newMessages[index]
+
+    if (message.editingContent !== undefined && message.editingContent.trim()) {
+      message.content = message.editingContent.trim()
+      message.isEditing = false
+      message.editingContent = undefined
+
+      // 更新消息数组
+      messages.value = newMessages
+
+      // 更新片段内容
+      updateFragmentContent()
+    } else {
+      ElMessage.warning('消息内容不能为空')
+    }
+  }
+}
+
+// 取消消息编辑
+const cancelMessageEdit = (index: number) => {
+  if (index >= 0 && index < messages.value.length) {
+    const newMessages = [...messages.value]
+    const message = newMessages[index]
+    message.isEditing = false
+    message.editingContent = undefined
+
+    // 更新消息数组
+    messages.value = newMessages
+  }
+}
+
+// 更新片段内容
+const updateFragmentContent = () => {
+  fragment.value.content = messages.value.map(msg =>
+    `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+  ).join('\n\n')
+  fragment.value.updatedAt = new Date()
 }
 
 // 复制消息内容
@@ -571,11 +659,24 @@ const copyMessage = (content: string) => {
 
 // 删除消息
 const deleteMessage = (index: number) => {
-
+  if (index >= 0 && index < messages.value.length) {
+    // 确认删除
+    ElMessageBox.confirm('确定要删除这条消息吗？', '确认删除', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }).then(() => {
+      messages.value.splice(index, 1)
+      updateFragmentContent()
+      ElMessage.success('消息已删除')
+    }).catch(() => {
+      // 用户取消删除
+    })
+  }
 }
 
 // 重新生成消息
-const regenerateMessage = (index: number) => {
+const regenerateMessage = async (index: number) => {
 
 }
 
@@ -1100,5 +1201,46 @@ body {
 /* 移除之前可能导致问题的伪元素 */
 .fragment-editor-page::after {
   display: none;
+}
+
+/* 消息编辑样式 */
+.message-edit {
+  width: 100%;
+}
+
+.edit-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  background-color: #fff;
+  margin-bottom: 8px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.edit-textarea:focus {
+  border-color: #409EFF;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+.edit-textarea:hover {
+  border-color: #c0c4cc;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.edit-actions .el-button {
+  padding: 4px 12px;
+  font-size: 12px;
 }
 </style>
