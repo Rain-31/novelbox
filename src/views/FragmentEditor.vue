@@ -58,9 +58,14 @@
                 </div>
               </div>
               <div class="message-actions">
-                <button class="action-btn" @click="regenerateMessage(index)" v-if="message.role === 'assistant'" title="重新生成">
-                  <svg viewBox="0 0 1024 1024" width="14" height="14">
+                <button class="action-btn" @click="handleRegenerateClick(index)" v-if="message.role === 'assistant'"
+                        :title="isSending ? '点击停止生成' : '重新生成'"
+                        :class="{ 'regenerating': isSending }">
+                  <svg v-if="!isSending" viewBox="0 0 1024 1024" width="14" height="14">
                     <path fill="currentColor" d="M909.1 209.3l-56.4 44.1C775.8 155.1 656.2 92 521.9 92 290 92 102.3 279.5 102 511.5 101.7 743.7 289.8 932 521.9 932c181.3 0 335.8-115 394.6-276.1 1.5-4.2-0.7-8.9-4.9-10.3l-56.7-19.5c-4.1-1.4-8.6 0.7-10.1 4.8-1.8 5-3.8 10-5.9 14.9-17.3 41-42.1 77.8-73.7 109.4-31.6 31.6-68.4 56.4-109.3 73.8-42.3 17.9-87.4 27-133.8 27-46.5 0-91.5-9.1-133.8-27-40.9-17.3-77.7-42.1-109.3-73.8-31.6-31.6-56.4-68.4-73.7-109.4-17.9-42.4-27-87.4-27-133.9s9.1-91.5 27-133.9c17.3-41 42.1-77.8 73.7-109.4 31.6-31.6 68.4-56.4 109.3-73.8 42.3-17.9 87.4-27 133.8-27 46.5 0 91.5 9.1 133.8 27 40.9 17.3 77.7 42.1 109.3 73.8 9.9 9.9 19.2 20.4 27.8 31.4l-60.2 47c-5.3 4.1-3.5 12.5 3 14.1l175.6 43c5 1.2 9.9-2.6 9.9-7.7l0.8-180.9c-0.1-6.6-7.8-10.3-13-6.2z"></path>
+                  </svg>
+                  <svg v-else viewBox="0 0 1024 1024" width="14" height="14" class="loading-icon">
+                    <path fill="currentColor" d="M512 1024c-69.1 0-136.2-13.5-199.3-40.2C251.7 958 197 921 150.7 874.3S46 748.3 21.8 685.2C-5 622.1-5 553.9 21.8 490.8S46 359.7 92.3 313.4 225.7 259 288.8 234.8c63.1-24.2 130.2-24.2 193.3 0 63.1 24.2 120.5 61.2 166.8 107.5S709 359.7 733.2 422.8c24.2 63.1 24.2 130.2 0 193.3-24.2 63.1-61.2 120.5-107.5 166.8S508.1 843 445 867.2c-63.1 24.2-130.2 24.2-193.3 0-63.1-24.2-120.5-61.2-166.8-107.5S25 641.3 0.8 578.2c-24.2-63.1-24.2-130.2 0-193.3 24.2-63.1 61.2-120.5 107.5-166.8S226.7 158 289.8 133.8c63.1-24.2 130.2-24.2 193.3 0 63.1 24.2 120.5 61.2 166.8 107.5S710 359.7 734.2 422.8c24.2 63.1 24.2 130.2 0 193.3-24.2 63.1-61.2 120.5-107.5 166.8S508.1 843 445 867.2c-63.1 24.2-130.2 24.2-193.3 0z"></path>
                   </svg>
                 </button>
                 <button class="action-btn" @click="editMessage(index)" title="编辑">
@@ -182,6 +187,9 @@ const messageListRef = ref<HTMLElement | null>(null);
 // AI服务实例
 const aiService = ref<any>(null);
 
+// 当前重新生成任务的取消函数
+const currentRegenerateTask = ref<any>(null);
+
 // 初始化AI服务
 const initAIService = async () => {
   try {
@@ -279,6 +287,12 @@ const sendChatMessage = async () => {
 
   const userInput = chatInput.value.trim()
   chatInput.value = ''
+
+  // 如果有正在进行的重新生成任务，先取消它
+  if (currentRegenerateTask.value && typeof currentRegenerateTask.value.cancel === 'function') {
+    currentRegenerateTask.value.cancel();
+    currentRegenerateTask.value = null;
+  }
 
   // 设置发送状态
   isSending.value = true
@@ -675,9 +689,165 @@ const deleteMessage = (index: number) => {
   }
 }
 
+// 处理重新生成按钮点击
+const handleRegenerateClick = async (index: number) => {
+  if (isSending.value) {
+    // 如果正在生成，则停止生成
+    if (currentRegenerateTask.value && typeof currentRegenerateTask.value.cancel === 'function') {
+      currentRegenerateTask.value.cancel();
+      currentRegenerateTask.value = null;
+      isSending.value = false;
+      ElMessage.info('已停止重新生成');
+    }
+  } else {
+    // 如果没有在生成，则开始重新生成
+    await regenerateMessage(index);
+  }
+};
+
 // 重新生成消息
 const regenerateMessage = async (index: number) => {
+  if (index < 0 || index >= messages.value.length) {
+    ElMessage.error('无效的消息索引');
+    return;
+  }
 
+  const targetMessage = messages.value[index];
+  if (targetMessage.role !== 'assistant') {
+    ElMessage.error('只能重新生成AI消息');
+    return;
+  }
+
+  // 如果当前正在发送消息，不允许重新生成
+  if (isSending.value) {
+    ElMessage.warning('请等待当前消息发送完成');
+    return;
+  }
+
+  try {
+    // 确认重新生成
+    await ElMessageBox.confirm(
+      '重新生成将删除此消息及其之后的所有消息，确定要继续吗？',
+      '确认重新生成',
+      {
+        confirmButtonText: '重新生成',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    );
+
+    // 设置发送状态
+    isSending.value = true;
+
+    // 显示重新生成提示
+    ElMessage.info('正在重新生成消息...');
+
+    // 获取目标消息之前的所有消息作为上下文
+    const contextMessages = messages.value.slice(0, index);
+
+    // 删除目标消息及其之后的所有消息
+    messages.value = contextMessages;
+
+    // 准备发送给AI的消息
+    let messagesForAI = contextMessages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+
+    // 确保第一条消息是用户角色，这是Gemini API的要求
+    if (messagesForAI.length > 0 && messagesForAI[0].role === 'assistant') {
+      // 如果第一条是助手消息，添加一个空的用户消息在前面
+      messagesForAI.unshift({
+        role: 'user',
+        content: '请继续'
+      });
+    }
+
+    // 如果没有消息或最后一条不是用户消息，添加一个默认的用户消息
+    if (messagesForAI.length === 0 || messagesForAI[messagesForAI.length - 1].role !== 'user') {
+      messagesForAI.push({
+        role: 'user',
+        content: '请继续回复'
+      });
+    }
+
+    const chatMessages = convertChatMessagesToMultiTurn(messagesForAI);
+
+    // 更新片段内容以保持同步
+    fragment.value.content = messages.value.map(msg =>
+      `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+    ).join('\n\n');
+
+    // 滚动到底部
+    scrollToBottom();
+
+    // 初始化AI服务（如果需要）
+    if (!aiService.value) {
+      await initAIService();
+    }
+
+    if (aiService.value) {
+      // 使用流式响应处理AI回复
+      let aiResponse = '';
+      const streamCallback = (text: string, error?: string, complete?: boolean) => {
+        if (error) {
+          ElMessage.error(`AI回复错误: ${error}`);
+          isSending.value = false;
+          currentRegenerateTask.value = null;
+          return;
+        }
+
+        aiResponse += text;
+
+        // 如果是第一个回复块，创建新的AI消息
+        if (aiResponse.length === text.length) {
+          messages.value.push({
+            role: 'assistant',
+            content: aiResponse,
+            timestamp: new Date()
+          });
+        } else {
+          // 更新最后一条消息的内容
+          const lastMessage = messages.value[messages.value.length - 1];
+          if (lastMessage && lastMessage.role === 'assistant') {
+            lastMessage.content = aiResponse;
+          }
+        }
+
+        // 更新片段内容
+        fragment.value.content = messages.value.map(msg =>
+          `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+        ).join('\n\n');
+
+        // 滚动到底部
+        scrollToBottom();
+
+        // 如果完成，结束发送状态
+        if (complete) {
+          isSending.value = false;
+          currentRegenerateTask.value = null;
+          ElMessage.success('消息重新生成完成');
+        }
+      };
+
+      // 调用AI服务生成回复，保存任务引用以便取消
+      currentRegenerateTask.value = aiService.value.generateText(chatMessages, streamCallback);
+    } else {
+      ElMessage.error('AI服务未初始化');
+      isSending.value = false;
+      currentRegenerateTask.value = null;
+    }
+
+  } catch (error) {
+    if (error === 'cancel') {
+      // 用户取消了操作
+      return;
+    }
+    console.error('重新生成消息失败:', error);
+    ElMessage.error('重新生成失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    isSending.value = false;
+    currentRegenerateTask.value = null;
+  }
 }
 
 // 初始化
@@ -820,6 +990,12 @@ onMounted(async () => {
 // 清理
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+
+  // 取消正在进行的重新生成任务
+  if (currentRegenerateTask.value && typeof currentRegenerateTask.value.cancel === 'function') {
+    currentRegenerateTask.value.cancel();
+    currentRegenerateTask.value = null;
+  }
 })
 </script>
 
@@ -1136,6 +1312,29 @@ onUnmounted(() => {
   color: #606266;
 }
 
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.action-btn:disabled:hover {
+  background-color: transparent;
+  color: #909399;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .user-message .action-btn:hover {
   background-color: rgba(64, 158, 255, 0.1);
   color: #409EFF;
@@ -1144,6 +1343,16 @@ onUnmounted(() => {
 .ai-message .action-btn:hover {
   background-color: rgba(103, 194, 58, 0.1);
   color: #67C23A;
+}
+
+.action-btn.regenerating {
+  background-color: rgba(64, 158, 255, 0.1);
+  color: #409EFF;
+}
+
+.action-btn.regenerating:hover {
+  background-color: rgba(245, 108, 108, 0.1);
+  color: #F56C6C;
 }
 
 .user-message .message-text {
