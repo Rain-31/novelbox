@@ -372,6 +372,14 @@ export default class FloatingToolbarController {
             break;
         }
         
+        // 创建包含提示词的初始内容
+        const initialContent = `用户: ${prompt}`;
+
+        // 更新片段窗口显示提示词
+        const title = params.type === 'expand' ? '扩写内容' :
+                     params.type === 'condense' ? '缩写内容' : '改写内容';
+        this.showStreamingFragment(initialContent, title, true, false, fragmentId);
+
         // 定义回调函数
         let content = '';
         const streamCallback = (text: string, error?: string, complete?: boolean) => {
@@ -379,16 +387,16 @@ export default class FloatingToolbarController {
             ElMessage.error(`AI生成失败：${error}`);
             return;
           }
-          
+
           // 累积内容
           content += text;
-          
+
+          // 构建完整的对话内容：提示词 + AI回复
+          const fullContent = `用户: ${prompt}\n\nAI: ${content}`;
+
           // 更新片段窗口内容
-          const title = params.type === 'expand' ? '扩写内容' : 
-                       params.type === 'condense' ? '缩写内容' : '改写内容';
-          
-          this.showStreamingFragment(content, title, false, complete || false, fragmentId);
-          
+          this.showStreamingFragment(fullContent, title, false, complete || false, fragmentId);
+
           // 如果生成完成，清理任务
           if (complete) {
             this.cleanupGenerationTask(fragmentId);
@@ -556,10 +564,13 @@ export default class FloatingToolbarController {
     );
 
     try {
-      // 显示初始的空片段窗口或更新现有窗口
-      const fragmentId = await this.showStreamingFragment('', '扩写内容', true, false, existingFragmentId);
+      // 创建包含提示词的初始内容
+      const initialContent = `用户: ${prompt}`;
+
+      // 显示包含提示词的片段窗口或更新现有窗口
+      const fragmentId = await this.showStreamingFragment(initialContent, '扩写内容', true, false, existingFragmentId);
       let content = '';
-      
+
       // 保存生成参数用于重新生成
       const params = {
         type: 'expand' as const,
@@ -567,9 +578,9 @@ export default class FloatingToolbarController {
         bookId: currentBook.id,
         chapterId: currentChapter?.id
       };
-      
+
       this.lastGenerationParams.set(fragmentId, params);
-      
+
       // 更新片段窗口，传递 hasLastGenerationParams 参数
       const fragment = this.streamingFragments.get(fragmentId);
       if (fragment && window.electronAPI) {
@@ -589,13 +600,16 @@ export default class FloatingToolbarController {
           ElMessage.error(`AI扩写失败：${error}`);
           return;
         }
-        
+
         // 累积内容
         content += text;
-        
+
+        // 构建完整的对话内容：提示词 + AI回复
+        const fullContent = `用户: ${prompt}\n\nAI: ${content}`;
+
         // 更新片段窗口内容
-        this.showStreamingFragment(content, '扩写内容', false, complete || false, fragmentId);
-        
+        this.showStreamingFragment(fullContent, '扩写内容', false, complete || false, fragmentId);
+
         // 如果生成完成，清理任务
         if (complete) {
           this.cleanupGenerationTask(fragmentId);
@@ -645,10 +659,13 @@ export default class FloatingToolbarController {
         selectedText
       );
 
-      // 显示初始的空片段窗口或更新现有窗口
-      const fragmentId = await this.showStreamingFragment('', '缩写内容', true, false, existingFragmentId);
+      // 创建包含提示词的初始内容
+      const initialContent = `用户: ${prompt}`;
+
+      // 显示包含提示词的片段窗口或更新现有窗口
+      const fragmentId = await this.showStreamingFragment(initialContent, '缩写内容', true, false, existingFragmentId);
       let content = '';
-      
+
       // 保存生成参数用于重新生成
       const params = {
         type: 'condense' as const,
@@ -656,9 +673,9 @@ export default class FloatingToolbarController {
         bookId: currentBook.id,
         chapterId: currentChapter?.id
       };
-      
+
       this.lastGenerationParams.set(fragmentId, params);
-      
+
       // 更新片段窗口，传递 hasLastGenerationParams 参数
       const fragment = this.streamingFragments.get(fragmentId);
       if (fragment && window.electronAPI) {
@@ -678,13 +695,16 @@ export default class FloatingToolbarController {
           ElMessage.error(`AI缩写失败：${error}`);
           return;
         }
-        
+
         // 累积内容
         content += text;
-        
+
+        // 构建完整的对话内容：提示词 + AI回复
+        const fullContent = `用户: ${prompt}\n\nAI: ${content}`;
+
         // 更新片段窗口内容
-        this.showStreamingFragment(content, '缩写内容', false, complete || false, fragmentId);
-        
+        this.showStreamingFragment(fullContent, '缩写内容', false, complete || false, fragmentId);
+
         // 如果生成完成，清理任务
         if (complete) {
           this.cleanupGenerationTask(fragmentId);
@@ -747,10 +767,13 @@ export default class FloatingToolbarController {
         
         quill.setSelection(tempIndex, tempLength, 'user');
 
-        // 显示初始的空片段窗口或更新现有窗口
-        const fragmentId = await this.showStreamingFragment('', '改写内容', true, false, existingFragmentId);
+        // 创建包含提示词的初始内容
+        const initialContent = `用户: ${prompt}`;
+
+        // 显示包含提示词的片段窗口或更新现有窗口
+        const fragmentId = await this.showStreamingFragment(initialContent, '改写内容', true, false, existingFragmentId);
         let content = '';
-        
+
         // 保存生成参数用于重新生成
         const params = {
           type: 'rewrite' as const,
@@ -759,9 +782,9 @@ export default class FloatingToolbarController {
           chapterId: currentChapter?.id,
           rewritePrompt: rewriteContent
         };
-        
+
         this.lastGenerationParams.set(fragmentId, params);
-        
+
         // 更新片段窗口，传递 hasLastGenerationParams 参数
         const fragment = this.streamingFragments.get(fragmentId);
         if (fragment && window.electronAPI) {
@@ -781,13 +804,16 @@ export default class FloatingToolbarController {
             ElMessage.error(`AI改写失败：${error}`);
             return;
           }
-          
+
           // 累积内容
           content += text;
-          
+
+          // 构建完整的对话内容：提示词 + AI回复
+          const fullContent = `用户: ${prompt}\n\nAI: ${content}`;
+
           // 更新片段窗口内容
-          this.showStreamingFragment(content, '改写内容', false, complete || false, fragmentId);
-          
+          this.showStreamingFragment(fullContent, '改写内容', false, complete || false, fragmentId);
+
           // 如果生成完成，清理任务
           if (complete) {
             this.cleanupGenerationTask(fragmentId);

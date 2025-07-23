@@ -328,13 +328,13 @@ const sendChatMessage = async () => {
       role: msg.role,
       content: msg.content
     }));
-    
+
     // 确保第一条消息是用户角色，这是Gemini API的要求
     if (messagesForAI.length > 0 && messagesForAI[0].role === 'assistant') {
-      // 如果第一条是助手消息，添加一个空的用户消息在前面
+      // 如果第一条是助手消息且没有用户消息，添加一个通用的用户消息
       messagesForAI.unshift({
         role: 'user',
-        content: '请继续'
+        content: '请根据上下文继续对话'
       });
     }
     
@@ -801,10 +801,10 @@ const regenerateMessage = async (index: number) => {
 
     // 确保第一条消息是用户角色，这是Gemini API的要求
     if (messagesForAI.length > 0 && messagesForAI[0].role === 'assistant') {
-      // 如果第一条是助手消息，添加一个空的用户消息在前面
+      // 如果第一条是助手消息且没有用户消息，添加一个通用的用户消息
       messagesForAI.unshift({
         role: 'user',
-        content: '请继续'
+        content: '请根据上下文继续对话'
       });
     }
 
