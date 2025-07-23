@@ -40,7 +40,26 @@
             </div>
             <div class="message-content">
               <!-- 显示模式 -->
-              <div v-if="!message.isEditing" class="message-text">{{ message.content }}</div>
+              <div v-if="!message.isEditing" class="message-text"
+                   :class="{ 'collapsed': message.role === 'user' && isMessageCollapsed(message.content) && !message.expanded }">
+                <div v-if="message.role === 'user' && isMessageCollapsed(message.content)" class="message-content-wrapper">
+                  <div class="message-preview" v-if="!message.expanded">
+                    {{ getMessagePreview(message.content) }}
+                    <button class="expand-btn" @click="toggleMessageExpansion(index)">
+                      <i class="el-icon-arrow-down"></i>
+                      展开
+                    </button>
+                  </div>
+                  <div class="message-full" v-else>
+                    {{ message.content }}
+                    <button class="collapse-btn" @click="toggleMessageExpansion(index)">
+                      <i class="el-icon-arrow-up"></i>
+                      收起
+                    </button>
+                  </div>
+                </div>
+                <div v-else>{{ message.content }}</div>
+              </div>
               <!-- 编辑模式 -->
               <div v-if="message.isEditing" class="message-edit">
                 <textarea
@@ -137,6 +156,7 @@ interface ChatMessage {
   timestamp: Date
   isEditing?: boolean
   editingContent?: string
+  expanded?: boolean  // 用于控制消息是否展开
 }
 
 // 简化的片段数据结构
@@ -668,6 +688,31 @@ const copyMessage = (content: string) => {
     document.execCommand('copy');
     document.body.removeChild(textArea);
     ElMessage.success('内容已复制');
+  }
+}
+
+// 判断消息是否需要折叠（超过指定长度）
+const isMessageCollapsed = (content: string) => {
+  const maxLength = 200; // 超过200个字符就折叠
+  return content.length > maxLength;
+}
+
+// 获取消息预览（截取前面部分）
+const getMessagePreview = (content: string) => {
+  const maxLength = 200;
+  if (content.length <= maxLength) {
+    return content;
+  }
+  return content.substring(0, maxLength) + '...';
+}
+
+// 切换消息展开/收起状态
+const toggleMessageExpansion = (index: number) => {
+  if (index >= 0 && index < messages.value.length) {
+    const newMessages = [...messages.value];
+    const message = newMessages[index];
+    message.expanded = !message.expanded;
+    messages.value = newMessages;
   }
 }
 
@@ -1276,6 +1321,53 @@ onUnmounted(() => {
   max-width: 100%;
   overflow-wrap: break-word;
   /* 确保长词可以换行 */
+  position: relative;
+}
+
+/* 消息内容包装器 */
+.message-content-wrapper {
+  position: relative;
+}
+
+/* 折叠状态的消息样式 */
+.message-text.collapsed {
+  position: relative;
+}
+
+/* 消息预览样式 */
+.message-preview {
+  position: relative;
+}
+
+/* 完整消息样式 */
+.message-full {
+  position: relative;
+}
+
+/* 展开按钮样式 */
+.expand-btn, .collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: #409EFF;
+  background: transparent;
+  border: 1px solid #409EFF;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  vertical-align: middle;
+}
+
+.expand-btn:hover, .collapse-btn:hover {
+  background-color: #409EFF;
+  color: #fff;
+}
+
+.expand-btn i, .collapse-btn i {
+  font-size: 10px;
 }
 
 /* 添加消息操作按钮样式 */
