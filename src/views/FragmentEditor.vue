@@ -584,12 +584,31 @@ const regenerateContent = () => {
   }
 }
 
+// 获取最新AI回复内容
+const getLatestAIReply = () => {
+  // 从后往前查找最新的AI消息
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    const message = messages.value[i]
+    if (message.role === 'assistant') {
+      return message.content
+    }
+  }
+  return null
+}
+
 // 插入到编辑器
 const insertToEditor = () => {
   try {
+    const latestAIReply = getLatestAIReply()
+
+    if (!latestAIReply) {
+      ElMessage.warning('没有找到AI回复内容')
+      return
+    }
+
     const message = {
       type: 'insert-fragment',
-      content: fragment.value.content
+      content: latestAIReply
     }
     window.electronAPI.sendToMainWindow(JSON.stringify(message))
     ElMessage.success('已发送到编辑器')
@@ -602,9 +621,16 @@ const insertToEditor = () => {
 // 替换编辑器中的选中内容
 const replaceInEditor = () => {
   try {
+    const latestAIReply = getLatestAIReply()
+
+    if (!latestAIReply) {
+      ElMessage.warning('没有找到AI回复内容')
+      return
+    }
+
     const message = {
       type: 'replace-fragment',
-      content: fragment.value.content
+      content: latestAIReply
     }
     window.electronAPI.sendToMainWindow(JSON.stringify(message))
     ElMessage.success('已发送到编辑器')
