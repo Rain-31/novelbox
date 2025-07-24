@@ -115,8 +115,15 @@
     <!-- 聊天输入区 -->
     <div class="chat-input-area">
       <div class="input-container">
-        <el-input v-model="chatInput" placeholder="与AI对话..." size="small" @keyup.enter="sendChatMessage"
-          class="chat-input" />
+        <el-input
+          v-model="chatInput"
+          placeholder="与AI对话... (Enter换行，Ctrl+Enter发送)"
+          size="small"
+          @keydown="handleChatInputKeydown"
+          class="chat-input"
+          type="textarea"
+          :autosize="{ minRows: 1, maxRows: 4 }"
+        />
       </div>
       <el-button class="send-button" circle type="primary" @click="sendChatMessage" :loading="isSending">
         <svg class="custom-send-icon" viewBox="0 0 24 24" width="14" height="14">
@@ -300,6 +307,18 @@ watch(() => messages.value.length, () => {
 watch(() => messages.value.map(m => m.content), () => {
   scrollToBottom();
 }, { deep: true });
+
+// 处理聊天输入框键盘事件
+const handleChatInputKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Enter') {
+    if (event.ctrlKey) {
+      // Ctrl+Enter 发送消息
+      event.preventDefault()
+      sendChatMessage()
+    }
+    // Enter 键默认换行，不需要特殊处理
+  }
+}
 
 // 发送聊天消息
 const sendChatMessage = async () => {
@@ -1190,31 +1209,27 @@ onUnmounted(() => {
   width: 100%;
 }
 
-:deep(.chat-input .el-input__wrapper) {
+:deep(.chat-input .el-textarea__inner) {
   border-radius: 16px;
-  padding-left: 12px;
-  padding-right: 12px;
+  padding: 8px 12px;
   background-color: #fff;
-  box-shadow: 0 0 0 1px rgba(230, 230, 230, 0.8) inset !important;
-  /* 统一边框颜色 */
-  height: 32px;
-  line-height: 32px;
-  display: flex;
-  align-items: center;
-}
-
-:deep(.chat-input .el-input__inner) {
-  height: 32px;
-  line-height: 32px;
+  border: 1px solid rgba(230, 230, 230, 0.8);
   font-size: 14px;
+  line-height: 1.4;
+  resize: none;
+  min-height: 32px;
+  max-height: 120px;
+  overflow-y: auto;
 }
 
-:deep(.chat-input .el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.3) inset !important;
+:deep(.chat-input .el-textarea__inner:hover) {
+  border-color: rgba(64, 158, 255, 0.3);
 }
 
-:deep(.chat-input .el-input__wrapper:focus-within) {
-  box-shadow: 0 0 0 1px #409EFF inset !important;
+:deep(.chat-input .el-textarea__inner:focus) {
+  border-color: #409EFF;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
 }
 
 /* 发送按钮样式 */
@@ -1469,11 +1484,6 @@ onUnmounted(() => {
 .empty-message {
   color: #909399;
   font-size: 14px;
-}
-
-/* 强制内容区填满窗口，覆盖原有的文本区域样式 */
-:deep(.el-textarea) {
-  display: none;
 }
 
 /* 移除通用的阴影样式，改用伪元素实现 */
