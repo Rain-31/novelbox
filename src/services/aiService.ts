@@ -728,7 +728,7 @@ class AIService {
     }
   }
 
-  async generateText(promptOrMessages: string | ChatMessage[], stream?: StreamCallback): Promise<AIResponse | StreamAIResponse> {
+  generateText(promptOrMessages: string | ChatMessage[], stream?: StreamCallback): Promise<AIResponse> | StreamAIResponse {
     const abortController = new AbortController();
     let aborted = false;
 
@@ -737,107 +737,112 @@ class AIService {
     const prompt = isMessagesArray ? '' : promptOrMessages;
     const messages = isMessagesArray ? promptOrMessages : undefined;
 
-    try {
-      if (stream) {
-        const streamProcess = (async () => {
-          try {
-            switch (this.config.provider) {
-              case 'openai':
-                await this.generateWithOpenAI(prompt, (text, error) => {
-                  if (aborted) return;
-                  stream(text, error);
-                }, abortController.signal, messages);
-                break;
-              case 'anthropic':
-                await this.generateWithAnthropic(prompt, (text, error) => {
-                  if (aborted) return;
-                  stream(text, error);
-                }, abortController.signal, messages);
-                break;
-              case 'gemini':
-                await this.generateWithGemini(prompt, (text, error) => {
-                  if (aborted) return;
-                  stream(text, error);
-                }, abortController.signal, messages);
-                break;
-              case 'deepseek':
-                await this.generateWithDeepseek(prompt, (text, error) => {
-                  if (aborted) return;
-                  stream(text, error);
-                }, abortController.signal, messages);
-                break;
-              case 'minimax':
-                await this.generateWithMiniMax(prompt, (text, error) => {
-                  if (aborted) return;
-                  stream(text, error);
-                }, abortController.signal, messages);
-                break;
-              default:
-                // 使用自定义服务商
-                await this.generateWithCustomProvider(prompt, (text, error) => {
-                  if (aborted) return;
-                  stream(text, error);
-                }, abortController.signal, messages);
-            }
-            stream('', undefined, true);
-          } catch (error) {
-            console.error('AI生成失败:', error);
-            if (!aborted) stream('', error instanceof Error ? error.message : 'Request failed');
+    if (stream) {
+      // 立即启动异步流处理
+      const streamProcess = (async () => {
+        try {
+          switch (this.config.provider) {
+            case 'openai':
+              await this.generateWithOpenAI(prompt, (text, error) => {
+                if (aborted) return;
+                stream(text, error);
+              }, abortController.signal, messages);
+              break;
+            case 'anthropic':
+              await this.generateWithAnthropic(prompt, (text, error) => {
+                if (aborted) return;
+                stream(text, error);
+              }, abortController.signal, messages);
+              break;
+            case 'gemini':
+              await this.generateWithGemini(prompt, (text, error) => {
+                if (aborted) return;
+                stream(text, error);
+              }, abortController.signal, messages);
+              break;
+            case 'deepseek':
+              await this.generateWithDeepseek(prompt, (text, error) => {
+                if (aborted) return;
+                stream(text, error);
+              }, abortController.signal, messages);
+              break;
+            case 'minimax':
+              await this.generateWithMiniMax(prompt, (text, error) => {
+                if (aborted) return;
+                stream(text, error);
+              }, abortController.signal, messages);
+              break;
+            default:
+              // 使用自定义服务商
+              await this.generateWithCustomProvider(prompt, (text, error) => {
+                if (aborted) return;
+                stream(text, error);
+              }, abortController.signal, messages);
           }
-        })();
+          if (!aborted) stream('', undefined, true);
+        } catch (error) {
+          console.error('AI生成失败:', error);
+          if (!aborted) stream('', error instanceof Error ? error.message : 'Request failed', true);
+        }
+      })();
 
-        return {
-          cancel: () => {
-            aborted = true;
-            abortController.abort();
-            stream('', '已中止生成', true);
-          }
-        };
-      }
-
-      let text: string;
-      switch (this.config.provider) {
-        case 'openai':
-          text = await this.generateWithOpenAI(prompt, undefined, undefined, messages);
-          break;
-        case 'anthropic':
-          text = await this.generateWithAnthropic(prompt, undefined, undefined, messages);
-          break;
-        case 'gemini':
-          text = await this.generateWithGemini(prompt, undefined, undefined, messages);
-          break;
-        case 'deepseek':
-          text = await this.generateWithDeepseek(prompt, undefined, undefined, messages);
-          break;
-        case 'minimax':
-          text = await this.generateWithMiniMax(prompt, undefined, undefined, messages);
-          break;
-        default:
-          text = await this.generateWithCustomProvider(prompt, undefined, undefined, messages);
-      }
-
-      console.log('生成的文本:', text);
-
-      if (!text) {
-        throw new Error('AI返回数据格式错误');
-      }
-
-      return { text };
-    } catch (error) {
-      console.error('AI生成失败:', error);
-
-      let errorMessage = '生成失败';
-      if (error instanceof AxiosError && error.response?.data?.error?.message) {
-        errorMessage = `API错误: ${error.response.data.error.message}`;
-      } else if (error instanceof Error) {
-        errorMessage = `请求错误: ${error.message}`;
-      }
-
+      // 立即返回包含cancel方法的对象
       return {
-        text: '',
-        error: errorMessage
+        cancel: () => {
+          aborted = true;
+          abortController.abort();
+          stream('', '已中止生成', true);
+        }
       };
     }
+
+    // 非流模式，返回Promise
+    return (async () => {
+      try {
+        let text: string;
+        switch (this.config.provider) {
+          case 'openai':
+            text = await this.generateWithOpenAI(prompt, undefined, undefined, messages);
+            break;
+          case 'anthropic':
+            text = await this.generateWithAnthropic(prompt, undefined, undefined, messages);
+            break;
+          case 'gemini':
+            text = await this.generateWithGemini(prompt, undefined, undefined, messages);
+            break;
+          case 'deepseek':
+            text = await this.generateWithDeepseek(prompt, undefined, undefined, messages);
+            break;
+          case 'minimax':
+            text = await this.generateWithMiniMax(prompt, undefined, undefined, messages);
+            break;
+          default:
+            text = await this.generateWithCustomProvider(prompt, undefined, undefined, messages);
+        }
+
+        console.log('生成的文本:', text);
+
+        if (!text) {
+          throw new Error('AI返回数据格式错误');
+        }
+
+        return { text };
+      } catch (error) {
+        console.error('AI生成失败:', error);
+
+        let errorMessage = '生成失败';
+        if (error instanceof AxiosError && error.response?.data?.error?.message) {
+          errorMessage = `API错误: ${error.response.data.error.message}`;
+        } else if (error instanceof Error) {
+          errorMessage = `请求错误: ${error.message}`;
+        }
+
+        return {
+          text: '',
+          error: errorMessage
+        };
+      }
+    })();
   }
 }
 

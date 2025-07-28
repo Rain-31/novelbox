@@ -125,23 +125,25 @@
           :autosize="{ minRows: 1, maxRows: 4 }"
         />
       </div>
-      <el-button class="send-button" circle type="primary" @click="sendChatMessage" :loading="isSending">
-        <svg class="custom-send-icon" viewBox="0 0 24 24" width="14" height="14">
-          <path d="M3,20 L21,12 L3,4 L3,9.5 L13,12 L3,14.5 Z"></path>
+      <el-button
+        class="send-button"
+        circle
+        :type="isAnyGenerating ? 'danger' : 'primary'"
+        @click="handleSendButtonClick"
+        :title="isAnyGenerating ? '点击停止生成' : '发送消息'"
+        :class="{ 'stop-mode': isAnyGenerating }">
+        <!-- 发送图标 -->
+        <svg v-if="!isAnyGenerating" class="custom-send-icon" viewBox="0 0 24 24" width="16" height="16">
+          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"></path>
+        </svg>
+        <!-- 停止图标 -->
+        <svg v-else class="custom-stop-icon" viewBox="0 0 24 24" width="14" height="14">
+          <path d="M6 6h12v12H6z" fill="currentColor"></path>
         </svg>
       </el-button>
     </div>
 
     <div class="editor-footer">
-      <!-- 生成控制按钮 -->
-      <template v-if="isGenerating">
-        <el-button type="danger" size="small" @click="stopGeneration">停止生成</el-button>
-      </template>
-      <template v-else>
-        <template v-if="wasGenerating || fragment.wasStopped">
-          <el-button type="primary" size="small" @click="regenerateContent">重新生成</el-button>
-        </template>
-      </template>
       <el-button type="success" size="small" @click="insertToEditor">插入原文</el-button>
       <el-button type="warning" size="small" @click="replaceInEditor">替换原文</el-button>
       <el-button type="primary" size="small" @click="saveFragment">保存</el-button>
@@ -150,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { convertChatMessagesToMultiTurn } from '../services/promptVariableService'
 import AIService from '../services/aiService'
@@ -198,12 +200,15 @@ const titleInputRef = ref<any>(null)
 const titleRef = ref<any>(null)
 // 片段是否正在生成
 const isGenerating = ref(false)
-// 片段是否曾经在生成（用于显示重新生成按钮）
-const wasGenerating = ref(false)
 
 // 聊天相关状态
 const chatInput = ref('')
 const isSending = ref(false)
+
+// 计算属性：是否有任何生成任务在进行
+const isAnyGenerating = computed(() => {
+  return isSending.value || isGenerating.value
+})
 
 // 聊天消息列表
 const messages = ref<ChatMessage[]>([])
@@ -216,6 +221,9 @@ const aiService = ref<any>(null);
 
 // 当前重新生成任务的取消函数
 const currentRegenerateTask = ref<any>(null);
+
+// 当前聊天生成任务的取消函数
+const currentChatTask = ref<any>(null);
 
 // 初始化AI服务
 const initAIService = async () => {
@@ -320,6 +328,53 @@ const handleChatInputKeydown = (event: KeyboardEvent) => {
   }
 }
 
+// 处理发送按钮点击
+const handleSendButtonClick = () => {
+  if (isAnyGenerating.value) {
+    // 如果有任何生成任务在进行，则停止所有生成
+    stopAllGeneration()
+  } else {
+    // 如果没有在生成，则发送消息
+    sendChatMessage()
+  }
+}
+
+// 停止所有生成任务
+const stopAllGeneration = () => {
+  let stopped = false;
+
+  // 停止聊天生成任务
+  if (currentChatTask.value && typeof currentChatTask.value.cancel === 'function') {
+    currentChatTask.value.cancel();
+    currentChatTask.value = null;
+    stopped = true;
+  }
+
+  // 停止重新生成任务
+  if (currentRegenerateTask.value && typeof currentRegenerateTask.value.cancel === 'function') {
+    currentRegenerateTask.value.cancel();
+    currentRegenerateTask.value = null;
+    stopped = true;
+  }
+
+  // 停止扩写、缩写、改写等任务（通过主窗口）
+  if (isGenerating.value) {
+    stopGeneration();
+    stopped = true;
+  }
+
+  // 重置发送状态
+  isSending.value = false;
+
+  if (stopped) {
+    ElMessage.info('已停止生成');
+  } else {
+    ElMessage.warning('没有正在进行的生成任务');
+  }
+}
+
+
+
 // 发送聊天消息
 const sendChatMessage = async () => {
   if (!chatInput.value.trim()) return
@@ -327,10 +382,14 @@ const sendChatMessage = async () => {
   const userInput = chatInput.value.trim()
   chatInput.value = ''
 
-  // 如果有正在进行的重新生成任务，先取消它
+  // 如果有正在进行的任务，先取消它们
   if (currentRegenerateTask.value && typeof currentRegenerateTask.value.cancel === 'function') {
     currentRegenerateTask.value.cancel();
     currentRegenerateTask.value = null;
+  }
+  if (currentChatTask.value && typeof currentChatTask.value.cancel === 'function') {
+    currentChatTask.value.cancel();
+    currentChatTask.value = null;
   }
 
   // 设置发送状态
@@ -379,6 +438,7 @@ const sendChatMessage = async () => {
         if (error) {
           ElMessage.error(`AI回复错误: ${error}`);
           isSending.value = false;
+          currentChatTask.value = null;
           return;
         }
         
@@ -410,11 +470,12 @@ const sendChatMessage = async () => {
         // 如果完成，结束发送状态
         if (complete) {
           isSending.value = false;
+          currentChatTask.value = null;
         }
       };
       
-      // 调用AI服务生成回复
-      aiService.value.generateText(chatMessages, streamCallback);
+      // 调用AI服务生成回复，保存任务引用以便取消
+      currentChatTask.value = aiService.value.generateText(chatMessages, streamCallback);
     } else {
       // 如果AI服务初始化失败，使用原来的方式发送到主窗口
       const message = {
@@ -550,36 +611,6 @@ const stopGeneration = () => {
     ElMessage.info('已发送停止指令');
   } catch (error) {
     console.error('发送停止指令失败:', error);
-    ElMessage.error('发送失败');
-  }
-}
-
-// 重新生成内容
-const regenerateContent = () => {
-  try {
-    if (!fragment.value.id) {
-      console.error('无法重新生成：片段ID为空');
-      ElMessage.error('无法重新生成：片段ID为空');
-      return;
-    }
-
-    const message = {
-      type: 'regenerate-content',
-      fragmentId: fragment.value.id
-    }
-
-    // 确保消息内容是字符串
-    const messageStr = JSON.stringify(message);
-    // 直接发送到主窗口
-    window.electronAPI.sendToMainWindow(messageStr);
-
-    // 更新本地UI状态
-    isGenerating.value = true;
-    fragment.value.wasStopped = false;
-
-    ElMessage.info('正在重新生成...');
-  } catch (error) {
-    console.error('发送重新生成指令失败:', error);
     ElMessage.error('发送失败');
   }
 }
@@ -963,15 +994,7 @@ onMounted(async () => {
     // 设置生成状态
     isGenerating.value = data.isGenerating || false;
 
-    // 只有在以下情况才设置曾经生成过的标志：
-    // 1. 明确标记了 wasStopped 为 true
-    // 2. 有 lastGenerationParams 参数（表示之前进行过生成）
-    if (data.wasStopped || data.hasLastGenerationParams) {
-      wasGenerating.value = true;
-    } else {
-      // 从片段栏直接创建的新片段，不应该显示重新生成按钮
-      wasGenerating.value = false;
-    }
+    // 注意：不再需要wasGenerating状态，因为重新生成按钮已被移除
 
     // 初始化消息数组 - 解析内容为消息
     if (data.content) {
@@ -1006,8 +1029,7 @@ onMounted(async () => {
       fragmentTitle.value = data.title;
     }
 
-    // 检查之前的生成状态
-    const wasGeneratingBefore = isGenerating.value;
+    // 注意：不再需要检查之前的生成状态
 
     // 更新生成状态
     if (data.isGenerating !== undefined) {
@@ -1019,12 +1041,7 @@ onMounted(async () => {
       fragment.value.wasStopped = data.wasStopped;
     }
 
-    // 更新重新生成按钮状态
-    if ((wasGeneratingBefore && !isGenerating.value && fragment.value.content.trim() !== '') ||
-      fragment.value.wasStopped ||
-      (!isGenerating.value && fragment.value.content.trim() !== '')) {
-      wasGenerating.value = true;
-    }
+    // 注意：不再需要更新重新生成按钮状态，因为按钮已被移除
 
     // 更新时间戳
     fragment.value.updatedAt = new Date();
@@ -1081,10 +1098,14 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
 
-  // 取消正在进行的重新生成任务
+  // 取消正在进行的所有任务
   if (currentRegenerateTask.value && typeof currentRegenerateTask.value.cancel === 'function') {
     currentRegenerateTask.value.cancel();
     currentRegenerateTask.value = null;
+  }
+  if (currentChatTask.value && typeof currentChatTask.value.cancel === 'function') {
+    currentChatTask.value.cancel();
+    currentChatTask.value = null;
   }
 })
 </script>
@@ -1260,30 +1281,48 @@ onUnmounted(() => {
 
 /* 发送按钮样式 */
 .send-button {
-  transition: all 0.2s;
-  height: 32px;
-  width: 32px;
-  min-width: 32px;
+  transition: all 0.3s ease;
+  height: 36px;
+  width: 36px;
+  min-width: 36px;
   /* 防止按钮被压缩 */
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
+  position: relative;
+  overflow: hidden;
 }
 
 .send-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.5);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+}
+
+.send-button.stop-mode {
+  background-color: #f56c6c !important;
+  border-color: #f56c6c !important;
+}
+
+.send-button.stop-mode:hover {
+  background-color: #f78989 !important;
+  border-color: #f78989 !important;
+  box-shadow: 0 4px 12px rgba(245, 108, 108, 0.4);
 }
 
 .custom-send-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  transition: all 0.2s ease;
+}
+
+.custom-stop-icon {
   width: 14px;
   height: 14px;
   fill: currentColor;
-  transform: rotate(-30deg);
-  margin-left: -1px;
-  margin-bottom: 2px;
+  transition: all 0.2s ease;
 }
 
 /* 聊天容器样式 */
