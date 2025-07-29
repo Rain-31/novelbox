@@ -372,10 +372,10 @@ export default class FloatingToolbarController {
             break;
         }
         
-        // 创建包含提示词的初始内容
-        const initialContent = `用户: ${prompt}`;
+        // 创建包含提示词和占位AI回复的初始内容
+        const initialContent = `用户: ${prompt}\n\nAI: 正在生成回复...`;
 
-        // 更新片段窗口显示提示词
+        // 更新片段窗口显示提示词和占位回复
         const title = params.type === 'expand' ? '扩写内容' :
                      params.type === 'condense' ? '缩写内容' : '改写内容';
         this.showStreamingFragment(initialContent, title, true, false, fragmentId);
@@ -385,6 +385,9 @@ export default class FloatingToolbarController {
         const streamCallback = (text: string, error?: string, complete?: boolean) => {
           if (error) {
             ElMessage.error(`AI生成失败：${error}`);
+            // 更新为错误消息
+            const errorContent = `用户: ${prompt}\n\nAI: 生成失败，请重试`;
+            this.showStreamingFragment(errorContent, title, false, true, fragmentId);
             return;
           }
 
@@ -564,10 +567,10 @@ export default class FloatingToolbarController {
     );
 
     try {
-      // 创建包含提示词的初始内容
-      const initialContent = `用户: ${prompt}`;
+      // 创建包含提示词和占位AI回复的初始内容
+      const initialContent = `用户: ${prompt}\n\nAI: 正在生成扩写内容...`;
 
-      // 显示包含提示词的片段窗口或更新现有窗口
+      // 显示包含提示词和占位回复的片段窗口或更新现有窗口
       const fragmentId = await this.showStreamingFragment(initialContent, '扩写内容', true, false, existingFragmentId);
       let content = '';
 
@@ -598,6 +601,9 @@ export default class FloatingToolbarController {
       const streamCallback = (text: string, error?: string, complete?: boolean) => {
         if (error) {
           ElMessage.error(`AI扩写失败：${error}`);
+          // 更新为错误消息
+          const errorContent = `用户: ${prompt}\n\nAI: 扩写失败，请重试`;
+          this.showStreamingFragment(errorContent, '扩写内容', false, true, fragmentId);
           return;
         }
 
@@ -659,10 +665,10 @@ export default class FloatingToolbarController {
         selectedText
       );
 
-      // 创建包含提示词的初始内容
-      const initialContent = `用户: ${prompt}`;
+      // 创建包含提示词和占位AI回复的初始内容
+      const initialContent = `用户: ${prompt}\n\nAI: 正在生成缩写内容...`;
 
-      // 显示包含提示词的片段窗口或更新现有窗口
+      // 显示包含提示词和占位回复的片段窗口或更新现有窗口
       const fragmentId = await this.showStreamingFragment(initialContent, '缩写内容', true, false, existingFragmentId);
       let content = '';
 
@@ -693,6 +699,9 @@ export default class FloatingToolbarController {
       const streamCallback = (text: string, error?: string, complete?: boolean) => {
         if (error) {
           ElMessage.error(`AI缩写失败：${error}`);
+          // 更新为错误消息
+          const errorContent = `用户: ${prompt}\n\nAI: 缩写失败，请重试`;
+          this.showStreamingFragment(errorContent, '缩写内容', false, true, fragmentId);
           return;
         }
 
@@ -767,10 +776,10 @@ export default class FloatingToolbarController {
         
         quill.setSelection(tempIndex, tempLength, 'user');
 
-        // 创建包含提示词的初始内容
-        const initialContent = `用户: ${prompt}`;
+        // 创建包含提示词和占位AI回复的初始内容
+        const initialContent = `用户: ${prompt}\n\nAI: 正在生成改写内容...`;
 
-        // 显示包含提示词的片段窗口或更新现有窗口
+        // 显示包含提示词和占位回复的片段窗口或更新现有窗口
         const fragmentId = await this.showStreamingFragment(initialContent, '改写内容', true, false, existingFragmentId);
         let content = '';
 
@@ -802,6 +811,9 @@ export default class FloatingToolbarController {
         const streamCallback = (text: string, error?: string, complete?: boolean) => {
           if (error) {
             ElMessage.error(`AI改写失败：${error}`);
+            // 更新为错误消息
+            const errorContent = `用户: ${prompt}\n\nAI: 改写失败，请重试`;
+            this.showStreamingFragment(errorContent, '改写内容', false, true, fragmentId);
             return;
           }
 

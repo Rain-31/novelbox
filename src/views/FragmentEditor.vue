@@ -41,7 +41,10 @@
             <div class="message-content">
               <!-- 显示模式 -->
               <div v-if="!message.isEditing" class="message-text"
-                   :class="{ 'collapsed': message.role === 'user' && isMessageCollapsed(message.content) && !message.expanded }">
+                   :class="{
+                     'collapsed': message.role === 'user' && isMessageCollapsed(message.content) && !message.expanded,
+                     'generating': message.role === 'assistant' && isGeneratingMessage(message.content)
+                   }">
                 <div v-if="message.role === 'user' && isMessageCollapsed(message.content)" class="message-content-wrapper">
                   <div class="message-preview" v-if="!message.expanded">
                     {{ getMessagePreview(message.content) }}
@@ -58,7 +61,15 @@
                     </button>
                   </div>
                 </div>
-                <div v-else>{{ message.content }}</div>
+                <div v-else>
+                  {{ message.content }}
+                  <!-- 为正在生成的消息添加动画点 -->
+                  <span v-if="message.role === 'assistant' && isGeneratingMessage(message.content)" class="generating-dots">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                  </span>
+                </div>
               </div>
               <!-- 编辑模式 -->
               <div v-if="message.isEditing" class="message-edit">
@@ -348,6 +359,17 @@ const stopAllGeneration = () => {
     currentChatTask.value.cancel();
     currentChatTask.value = null;
     stopped = true;
+
+    // 更新最后一条AI消息为停止状态
+    const lastMessage = messages.value[messages.value.length - 1];
+    if (lastMessage && lastMessage.role === 'assistant' &&
+        (lastMessage.content === '正在生成回复...' || lastMessage.content.includes('正在生成'))) {
+      lastMessage.content = '生成已停止';
+      // 更新片段内容
+      fragment.value.content = messages.value.map(msg =>
+        `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+      ).join('\n\n');
+    }
   }
 
   // 停止重新生成任务
@@ -355,6 +377,17 @@ const stopAllGeneration = () => {
     currentRegenerateTask.value.cancel();
     currentRegenerateTask.value = null;
     stopped = true;
+
+    // 更新最后一条AI消息为停止状态
+    const lastMessage = messages.value[messages.value.length - 1];
+    if (lastMessage && lastMessage.role === 'assistant' &&
+        (lastMessage.content === '正在重新生成回复...' || lastMessage.content.includes('正在重新生成'))) {
+      lastMessage.content = '重新生成已停止';
+      // 更新片段内容
+      fragment.value.content = messages.value.map(msg =>
+        `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+      ).join('\n\n');
+    }
   }
 
   // 停止扩写、缩写、改写等任务（通过主窗口）
@@ -432,6 +465,22 @@ const sendChatMessage = async () => {
     }
 
     if (aiService.value) {
+      // 先创建一个占位的AI消息，显示"正在生成..."
+      const placeholderMessage = {
+        role: 'assistant' as const,
+        content: '正在生成回复...',
+        timestamp: new Date()
+      };
+      messages.value.push(placeholderMessage);
+
+      // 更新片段内容
+      fragment.value.content = messages.value.map(msg =>
+        `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+      ).join('\n\n');
+
+      // 滚动到底部
+      scrollToBottom();
+
       // 使用流式响应处理AI回复
       let aiResponse = '';
       const streamCallback = (text: string, error?: string, complete?: boolean) => {
@@ -439,41 +488,37 @@ const sendChatMessage = async () => {
           ElMessage.error(`AI回复错误: ${error}`);
           isSending.value = false;
           currentChatTask.value = null;
-          return;
-        }
-        
-        aiResponse += text;
-        
-        // 如果是第一个回复块，创建新的AI消息
-        if (aiResponse.length === text.length) {
-          messages.value.push({
-            role: 'assistant',
-            content: aiResponse,
-            timestamp: new Date()
-          });
-        } else {
-          // 更新最后一条消息的内容
+          // 移除占位消息或更新为错误消息
           const lastMessage = messages.value[messages.value.length - 1];
           if (lastMessage && lastMessage.role === 'assistant') {
-            lastMessage.content = aiResponse;
+            lastMessage.content = '生成失败，请重试';
           }
+          return;
         }
-        
+
+        aiResponse += text;
+
+        // 更新最后一条AI消息的内容
+        const lastMessage = messages.value[messages.value.length - 1];
+        if (lastMessage && lastMessage.role === 'assistant') {
+          lastMessage.content = aiResponse;
+        }
+
         // 更新片段内容
         fragment.value.content = messages.value.map(msg =>
           `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
         ).join('\n\n');
-        
+
         // 滚动到底部
         scrollToBottom();
-        
+
         // 如果完成，结束发送状态
         if (complete) {
           isSending.value = false;
           currentChatTask.value = null;
         }
       };
-      
+
       // 调用AI服务生成回复，保存任务引用以便取消
       currentChatTask.value = aiService.value.generateText(chatMessages, streamCallback);
     } else {
@@ -792,6 +837,15 @@ const toggleMessageExpansion = (index: number) => {
   }
 }
 
+// 判断消息是否正在生成
+const isGeneratingMessage = (content: string) => {
+  return content.includes('正在生成') ||
+         content.includes('正在重新生成') ||
+         content.includes('正在生成扩写内容') ||
+         content.includes('正在生成缩写内容') ||
+         content.includes('正在生成改写内容');
+}
+
 // 删除消息
 const deleteMessage = (index: number) => {
   if (index >= 0 && index < messages.value.length) {
@@ -818,6 +872,18 @@ const handleRegenerateClick = async (index: number) => {
       currentRegenerateTask.value.cancel();
       currentRegenerateTask.value = null;
       isSending.value = false;
+
+      // 更新最后一条AI消息为停止状态
+      const lastMessage = messages.value[messages.value.length - 1];
+      if (lastMessage && lastMessage.role === 'assistant' &&
+          (lastMessage.content === '正在重新生成回复...' || lastMessage.content.includes('正在重新生成'))) {
+        lastMessage.content = '重新生成已停止';
+        // 更新片段内容
+        fragment.value.content = messages.value.map(msg =>
+          `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+        ).join('\n\n');
+      }
+
       ElMessage.info('已停止重新生成');
     }
   } else {
@@ -908,6 +974,22 @@ const regenerateMessage = async (index: number) => {
     }
 
     if (aiService.value) {
+      // 先创建一个占位的AI消息，显示"正在重新生成..."
+      const placeholderMessage = {
+        role: 'assistant' as const,
+        content: '正在重新生成回复...',
+        timestamp: new Date()
+      };
+      messages.value.push(placeholderMessage);
+
+      // 更新片段内容
+      fragment.value.content = messages.value.map(msg =>
+        `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+      ).join('\n\n');
+
+      // 滚动到底部
+      scrollToBottom();
+
       // 使用流式响应处理AI回复
       let aiResponse = '';
       const streamCallback = (text: string, error?: string, complete?: boolean) => {
@@ -915,24 +997,20 @@ const regenerateMessage = async (index: number) => {
           ElMessage.error(`AI回复错误: ${error}`);
           isSending.value = false;
           currentRegenerateTask.value = null;
+          // 移除占位消息或更新为错误消息
+          const lastMessage = messages.value[messages.value.length - 1];
+          if (lastMessage && lastMessage.role === 'assistant') {
+            lastMessage.content = '重新生成失败，请重试';
+          }
           return;
         }
 
         aiResponse += text;
 
-        // 如果是第一个回复块，创建新的AI消息
-        if (aiResponse.length === text.length) {
-          messages.value.push({
-            role: 'assistant',
-            content: aiResponse,
-            timestamp: new Date()
-          });
-        } else {
-          // 更新最后一条消息的内容
-          const lastMessage = messages.value[messages.value.length - 1];
-          if (lastMessage && lastMessage.role === 'assistant') {
-            lastMessage.content = aiResponse;
-          }
+        // 更新最后一条AI消息的内容
+        const lastMessage = messages.value[messages.value.length - 1];
+        if (lastMessage && lastMessage.role === 'assistant') {
+          lastMessage.content = aiResponse;
         }
 
         // 更新片段内容
@@ -1618,5 +1696,61 @@ body {
 .edit-actions .el-button {
   padding: 4px 12px;
   font-size: 12px;
+}
+
+/* 正在生成消息的样式 */
+.message-text.generating {
+  position: relative;
+  background: linear-gradient(90deg, #F2F6FC 0%, #E6F1FF 50%, #F2F6FC 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* 生成中的动画点 */
+.generating-dots {
+  display: inline-block;
+  margin-left: 4px;
+}
+
+.generating-dots .dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #409EFF;
+  margin: 0 1px;
+  animation: bounce 1.4s ease-in-out infinite both;
+}
+
+.generating-dots .dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.generating-dots .dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.generating-dots .dot:nth-child(3) {
+  animation-delay: 0s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 </style>
