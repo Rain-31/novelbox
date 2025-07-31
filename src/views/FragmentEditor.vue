@@ -652,8 +652,6 @@ const stopGeneration = () => {
     // 更新本地状态
     isGenerating.value = false;
     fragment.value.wasStopped = true;
-
-    ElMessage.info('已发送停止指令');
   } catch (error) {
     console.error('发送停止指令失败:', error);
     ElMessage.error('发送失败');

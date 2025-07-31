@@ -217,7 +217,6 @@ export default class FloatingToolbarController {
             console.log(`没有找到ID为 ${fragmentId} 的片段`);
           }
           
-          ElMessage.info('已停止AI生成');
           return;
         } catch (error) {
           console.error('停止生成任务时出错:', error);
