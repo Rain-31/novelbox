@@ -8,7 +8,7 @@
           </button>
         </div>
         <div class="center-section">
-          <h1 class="text-2xl font-bold">{{ bookTitle || '小说编辑器' }}</h1>
+          <h1 class="text-2xl font-bold book-title">{{ bookTitle || '小说编辑器' }}</h1>
         </div>
         <div class="right-section">
           <button @click="showOutline = true" class="outline-btn">
@@ -227,5 +227,12 @@ onBeforeUnmount(() => {
 
 .outline-icon {
   @apply text-xl;
+}
+
+.book-title {
+  max-width: 15em; /* 限制最大宽度为15个字符 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
