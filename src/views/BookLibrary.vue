@@ -307,7 +307,7 @@ const applyAIContent = () => {
 
 <style scoped>
 .book-library-page {
-  @apply h-screen w-full flex flex-col bg-gray-50 overflow-auto p-4;
+  @apply min-h-screen w-full flex flex-col bg-gray-50 overflow-auto p-4 pb-8;
 }
 
 .library-header {
@@ -323,7 +323,7 @@ const applyAIContent = () => {
 }
 
 .books-container {
-  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center;
+  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center pb-8;
 }
 
 .book-card {
