@@ -132,14 +132,21 @@ class AIService {
           }
         }
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          stream('', '已中止生成');
-          return fullText;
-        } else if (error instanceof Error) {
-          stream('', error.message);
+        if (stream) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            stream('', '已中止生成');
+            return fullText;
+          } else if (error instanceof Error) {
+            stream('', error.message);
+          }
+        }
+
+        // 对于非流模式，直接抛出错误
+        if (!stream) {
+          throw error;
         }
       } finally {
-        if (!signal?.aborted) {
+        if (stream && !signal?.aborted) {
           stream('', undefined, true);
         }
       }
@@ -227,14 +234,21 @@ class AIService {
 
         await response.finalMessage();
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          stream('', '已中止生成');
-          return fullText;
-        } else if (error instanceof Error) {
-          stream('', error.message);
+        if (stream) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            stream('', '已中止生成');
+            return fullText;
+          } else if (error instanceof Error) {
+            stream('', error.message);
+          }
+        }
+
+        // 对于非流模式，直接抛出错误
+        if (!stream) {
+          throw error;
         }
       } finally {
-        if (!signal?.aborted) {
+        if (stream && !signal?.aborted) {
           stream('', undefined, true);
         }
       }
@@ -373,18 +387,22 @@ class AIService {
     } catch (error) {
       console.error('Gemini API错误:', error);
 
-      if (error instanceof Error && error.name === 'AbortError') {
-        stream('', '已中止生成');
-        return '';
-      } else {
-        stream('', error instanceof Error ? error.message : 'Stream error');
+      if (stream) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          stream('', '已中止生成');
+          return '';
+        } else {
+          stream('', error instanceof Error ? error.message : 'Stream error');
+        }
       }
+
+      // 对于非流模式，直接抛出错误
+      throw error;
     } finally {
-      if (!signal?.aborted) {
+      if (stream && !signal?.aborted) {
         stream('', undefined, true);
       }
     }
-    return '';
   }
 
   private async generateWithDeepseek(prompt: string, stream?: StreamCallback, signal?: AbortSignal, messages?: ChatMessage[]): Promise<string> {
@@ -416,14 +434,21 @@ class AIService {
           }
         }
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          stream('', '已中止生成');
-          return fullText;
-        } else if (error instanceof Error) {
-          stream('', error.message);
+        if (stream) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            stream('', '已中止生成');
+            return fullText;
+          } else if (error instanceof Error) {
+            stream('', error.message);
+          }
+        }
+
+        // 对于非流模式，直接抛出错误
+        if (!stream) {
+          throw error;
         }
       } finally {
-        if (!signal?.aborted) {
+        if (stream && !signal?.aborted) {
           stream('', undefined, true);
         }
       }
@@ -540,13 +565,17 @@ class AIService {
         }
         return fullText;
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          stream('', '已中止生成');
-          return '';
+        if (stream) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            stream('', '已中止生成');
+            return '';
+          }
+          if (error instanceof Error) {
+            stream('', error.message);
+          }
         }
-        if (error instanceof Error) {
-          stream('', error.message);
-        }
+
+        // 对于非流模式，直接抛出错误
         throw error;
       }
     } else {
@@ -690,10 +719,14 @@ class AIService {
 
         return fullText;
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          stream('', '已中止生成');
-          return '';
+        if (stream) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            stream('', '已中止生成');
+            return '';
+          }
         }
+
+        // 对于非流模式，直接抛出错误
         throw error;
       }
     } else {
