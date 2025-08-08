@@ -47,12 +47,11 @@ export const AI_PROVIDERS: AIProvider[] = [
     id: 'gemini',
     name: 'Gemini',
     models: [
-      { id: 'gemini-2.0-flash', name: 'Gemini Flash', maxTokens: 25000 },
-      { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'Gemini Flash Thinking', maxTokens: 25000 },
       { id: 'gemini-2.5-pro', name: 'Gemini 2.5 pro', maxTokens: 25000 },
-      { id: 'gemini-2.5-flash-preview-04-17-thinking', name: 'Gemini 2.5 Flash Thinking', maxTokens: 25000 },
       { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', maxTokens: 25000 },
-      { id: 'gemini-2.5-flash-lite-preview-06-17', name: 'Gemini 2.5 Flash-Lite', maxTokens: 25000 }
+      { id: 'gemini-2.5-flash-lite-preview-06-17', name: 'Gemini 2.5 Flash-Lite', maxTokens: 25000 },
+      { id: 'gemini-2.0-flash', name: 'Gemini Flash', maxTokens: 25000 },
+      { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'Gemini Flash Thinking', maxTokens: 25000 }
     ],
     defaultTemperature: 0.7,
     defaultTopP: 0.95
