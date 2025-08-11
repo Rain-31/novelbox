@@ -1310,7 +1310,7 @@ onUnmounted(() => {
 
 /* 聊天输入区域 */
 .chat-input-area {
-  padding: 8px;
+  padding: 8px 8px 4px 8px;
   background-color: #f5f7fa;
   border-left: 1px solid rgba(230, 230, 230, 0.8);
   border-right: 1px solid rgba(230, 230, 230, 0.8);
@@ -1630,11 +1630,27 @@ onUnmounted(() => {
 /* 移除通用的阴影样式，改用伪元素实现 */
 .window-drag-area,
 .editor-content,
-.editor-footer,
 .chat-input-area {
   box-shadow: none;
   background-color: #f5f7fa;
   /* 统一背景色 */
+}
+
+/* 底部按钮区域样式 */
+.editor-footer {
+  padding: 8px 8px 12px 8px;
+  background-color: #f5f7fa;
+  border-left: 1px solid rgba(230, 230, 230, 0.8);
+  border-right: 1px solid rgba(230, 230, 230, 0.8);
+  border-bottom: 1px solid rgba(230, 230, 230, 0.8);
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  min-height: 40px;
+  box-sizing: border-box;
 }
 
 /* 添加样式修复透明窗口问题 */
