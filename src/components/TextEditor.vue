@@ -650,14 +650,14 @@ const handleSelectionChange = (range: any, oldRange: any, source: string) => {
 
 .text-editor-container {
   @apply flex flex-col h-full;
+  min-height: 0;
 }
 
 .status-bar {
-  @apply text-sm max-w-[150px] truncate text-right text-gray-600;
-}
-
-.status-bar {
-  @apply flex justify-end p-1 bg-gray-50 border-b border-gray-200 max-w-[200px] ml-auto;
+  @apply flex justify-end p-2 bg-gray-50 border-t border-gray-200 text-sm text-gray-600;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 :deep(.ql-toolbar) {
@@ -673,8 +673,7 @@ const handleSelectionChange = (range: any, oldRange: any, source: string) => {
 :deep(.ql-editor) {
   @apply p-6 overflow-y-auto bg-white text-black;
   height: calc(100vh - 220px);
-  min-height: 400px;
-  max-height: calc(100vh - 180px);
+  min-height: 350px;
 }
 
 .ai-continue-toolbar {
@@ -755,9 +754,8 @@ const handleSelectionChange = (range: any, oldRange: any, source: string) => {
 }
 
 :deep(.ql-container) {
-  @apply h-[calc(100vh-180px)] bg-white;
+  @apply flex-1 bg-white overflow-hidden;
   font-size: 16px;
-  min-height: 400px;
 }
 
 :deep(.ql-editor) {
@@ -765,7 +763,6 @@ const handleSelectionChange = (range: any, oldRange: any, source: string) => {
   color: black !important;
   background-color: white !important;
   min-height: 400px;
-  max-height: calc(100vh - 180px);
   overflow-y: auto;
 }
 
@@ -1021,5 +1018,24 @@ const handleSelectionChange = (range: any, oldRange: any, source: string) => {
 :deep(.continue-position-dialog .el-button) {
   padding: 12px 24px;
   font-size: 16px;
+}
+
+/* 针对低分辨率的简单优化 */
+@media (max-height: 800px) {
+  :deep(.ql-editor) {
+    height: calc(100vh - 240px);
+    min-height: 300px;
+  }
+}
+
+@media (max-height: 768px) {
+  :deep(.ql-editor) {
+    height: calc(100vh - 260px);
+    min-height: 250px;
+  }
+  
+  .status-bar {
+    @apply p-1 text-xs;
+  }
 }
 </style>
