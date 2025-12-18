@@ -47,6 +47,8 @@ export const AI_PROVIDERS: AIProvider[] = [
     id: 'gemini',
     name: 'Gemini',
     models: [
+      { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', maxTokens: 25000 },
+      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', maxTokens: 25000 },
       { id: 'gemini-2.5-pro', name: 'Gemini 2.5 pro', maxTokens: 25000 },
       { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', maxTokens: 25000 },
       { id: 'gemini-2.5-flash-lite-preview-06-17', name: 'Gemini 2.5 Flash-Lite', maxTokens: 25000 },
