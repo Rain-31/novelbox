@@ -194,6 +194,44 @@ export const defaultRewriteAbbreviatePrompt = '请根据以下内容改写小说
 
 export const defaultUpdateSettingsPrompt = '请总结本章内容中的新增设定和改变的设定，包括人物设定、能力设定、物品设定等等，并更新小说的当前设定，不要使用任何markdown格式，不要使用除中文外的其他语言。确保只生成更新后的设定不生成任何其他信息。\n小说名:${title}\n简介:${description}\n当前设定:${settings}\n本章内容:${chapter}'
 
+export const defaultSettingsJsonPrompt = `请根据以下内容，生成结构化的小说设定，以JSON数组格式返回，只输出合法JSON不包含任何其他文字。
+
+JSON结构说明（SettingEntry[]）：
+[
+  {
+    "id": "唯一字符串id",
+    "name": "条目名称，如：张三",
+    "content": "该条目的详细内容",
+    "children": []
+  }
+]
+
+建议的顶层分类：人物、世界观、能力体系、物品道具（根据小说类型按需取舍，可增减）。
+顶层分类下用 children 嵌套具体条目，name 只写条目本身的名称，不加父分类前缀。
+每个节点必须有唯一的 id（用短随机字符串）。
+
+小说名：\${title}
+简介：\${description}
+设定要求：\${content}`
+
+export const defaultUpdateSettingsJsonPrompt = `请分析本章内容中新增或变化的设定，以JSON格式返回差异，只输出合法JSON不包含任何其他文字。
+
+当前设定（JSON格式，包含各节点id）：
+\${settingData}
+
+返回格式：
+{
+  "add": [ ...SettingEntry ],
+  "modify": [ { "id": "节点id", "name": "新名称", "content": "新内容" } ],
+  "delete": [ "节点id" ]
+}
+
+三个字段均可为空数组。add 中新增条目需自行生成唯一id。
+
+小说名：\${title}
+简介：\${description}
+本章内容：\${chapter}`
+
 export const defaultProofreadPrompt = `请对以下小说章节内容进行校对，检查以下方面的问题：
 1. 错别字和用词不当
 2. 语法错误

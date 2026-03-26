@@ -1,4 +1,4 @@
-import { type Book, type Chapter } from './bookConfigService'
+import { type Book, type Chapter, type SettingEntry } from './bookConfigService'
 import { PromptConfigService } from './promptConfigService'
 import * as DefaultPrompts from '../constants'
 
@@ -274,4 +274,41 @@ export const convertChatMessagesToMultiTurn = (messages: any[]): { role: 'user' 
         role: msg.role,
         content: msg.content
     }));
+}
+
+/**
+ * 将 SettingEntry 树序列化为可读文本（供其他 AI 提示词使用）
+ */
+export const serializeSettingToText = (entries: SettingEntry[], indent = 0): string => {
+    return entries.map(entry => {
+        const prefix = '  '.repeat(indent)
+        const lines = [`${prefix}【${entry.name}】`, `${prefix}${entry.content}`]
+        if (entry.children?.length) {
+            lines.push(serializeSettingToText(entry.children, indent + 1))
+        }
+        return lines.join('\n')
+    }).join('\n\n')
+}
+
+/**
+ * 替换设定 JSON 生成提示词中的变量
+ */
+export const replaceSettingsJsonPromptVariables = async (book: Book, content: string): Promise<string> => {
+    const promptConfig = await PromptConfigService.getPromptByName('settingsJson') || DefaultPrompts.defaultSettingsJsonPrompt
+    return promptConfig
+        .replace('${content}', content)
+        .replace('${title}', book.title)
+        .replace('${description}', book.description || '')
+}
+
+/**
+ * 替换设定 JSON 更新提示词中的变量
+ */
+export const replaceUpdateSettingsJsonPromptVariables = async (book: Book, settingData: SettingEntry[], chapterContent: string): Promise<string> => {
+    const promptConfig = await PromptConfigService.getPromptByName('updateSettingsJson') || DefaultPrompts.defaultUpdateSettingsJsonPrompt
+    return promptConfig
+        .replace('${settingData}', JSON.stringify(settingData, null, 2))
+        .replace('${title}', book.title)
+        .replace('${description}', book.description || '')
+        .replace('${chapter}', chapterContent)
 }

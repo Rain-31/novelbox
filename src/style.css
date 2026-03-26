@@ -43,6 +43,51 @@ body {
   background-color: transparent !important;
 }
 
+/* 面板底部按钮组 — OutlinePanel 内共用 */
+.panel-button-group {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px 8px;
+  flex-shrink: 0;
+}
+
+.panel-btn {
+  width: calc(50% - 4px);
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  box-sizing: border-box;
+  color: #fff;
+}
+
+.panel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.panel-btn-blue {
+  background-color: #3b82f6;
+}
+.panel-btn-blue:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.panel-btn-purple {
+  background-color: #a855f7;
+}
+.panel-btn-purple:hover:not(:disabled) {
+  background-color: #9333ea;
+}
+
+.panel-btn-green {
+  background-color: #22c55e;
+}
+.panel-btn-green:hover:not(:disabled) {
+  background-color: #16a34a;
+}
+
 /* 当URL包含fragment-editor时，应用透明背景 */
 html[data-route="fragment-editor"],
 html[data-route="fragment-editor"] body,

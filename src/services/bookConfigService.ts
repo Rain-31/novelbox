@@ -22,11 +22,19 @@ export interface Fragment {
   updatedAt: string;
 }
 
+export interface SettingEntry {
+  id: string;
+  name: string;
+  content: string;
+  children?: SettingEntry[];
+}
+
 export interface Book {
   id: string;
   title: string;
   description: string;
   setting: string;
+  settingData?: SettingEntry[];
   plot: string;
   content: Chapter[];
   fragments?: Fragment[];
