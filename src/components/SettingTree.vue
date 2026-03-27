@@ -11,6 +11,7 @@
       @delete="onDelete"
       @drill="$emit('drill', $event)"
       @add-child="$emit('add-child', $event)"
+      @open-fragment="$emit('open-fragment', $event)"
     />
   </div>
 </template>
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   'update:entries': [entries: SettingEntry[]]
   'drill': [entry: SettingEntry]
   'add-child': [entry: SettingEntry]
+  'open-fragment': [entry: SettingEntry]
 }>()
 
 const onUpdate = (updated: SettingEntry) => {

@@ -44,6 +44,7 @@
         @update:entries="onEntriesChange"
         @drill="onDrill"
         @add-child="onAddChild"
+        @open-fragment="onOpenFragment"
       />
     </div>
 
@@ -218,6 +219,18 @@ const onAddChild = (parentEntry: SettingEntry) => {
   const newEntry: SettingEntry = { id: genId(), name: '新条目', content: '', children: [] }
   onEntriesChange([...currentEntries.value, newEntry])
   focusPanel()
+}
+
+const onOpenFragment = async (entry: SettingEntry) => {
+  const content = `用户: 【${entry.name}】${entry.content}`
+  const fragment = {
+    id: `setting-${entry.id}`,
+    title: entry.name,
+    content,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+  await window.electronAPI.createFragmentWindow(fragment)
 }
 
 const navigateTo = (index: number) => {

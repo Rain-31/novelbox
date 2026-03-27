@@ -62,6 +62,7 @@ const emit = defineEmits<{
   delete: [id: string]
   drill: [entry: SettingEntry]
   'add-child': [entry: SettingEntry]
+  'open-fragment': [entry: SettingEntry]
 }>()
 
 const isExpanded = ref(false)
@@ -77,8 +78,9 @@ const onHeaderClick = () => {
   if (isEditing.value) return
   if (hasChildren.value) {
     emit('drill', props.entry)
+  } else {
+    emit('open-fragment', props.entry)
   }
-  // 叶节点点击不需要额外操作，content 始终展示
 }
 
 const autoResize = () => {
